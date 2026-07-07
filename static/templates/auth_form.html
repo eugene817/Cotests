@@ -1,0 +1,40 @@
+{{define "auth_form"}}
+<main style="max-width: 480px; margin: 0 auto; padding: var(--spacing-16) var(--spacing-8);">
+  <h2 style="margin-bottom:var(--spacing-8)">{{if eq .Mode "login"}}Login{{else}}Register{{end}}</h2>
+
+  {{if .Error}}
+    <div class="card surface-container-highest" style="margin-bottom:var(--spacing-4); padding:var(--spacing-4);">
+      <p class="label-sm">{{.Error}}</p>
+    </div>
+  {{end}}
+
+  <form class="card" style="display:flex; flex-direction:column; gap:var(--spacing-4);"
+        method="post" action="{{.Action}}" hx-post="{{.Action}}" hx-target="body" hx-swap="outerHTML">
+    {{if eq .Mode "register"}}
+      <div>
+        <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Name</label>
+        <input type="text" name="name" placeholder="Your name">
+      </div>
+    {{end}}
+    <div>
+      <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Email</label>
+      <input type="email" name="email" required placeholder="you@example.com">
+    </div>
+    <div>
+      <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Password</label>
+      <input type="password" name="password" required placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+    </div>
+    <button class="btn btn-primary" type="submit">
+      {{if eq .Mode "login"}}Login{{else}}Register{{end}}
+    </button>
+  </form>
+
+  <p class="label-sm" style="margin-top:var(--spacing-4); text-align:center;">
+    {{if eq .Mode "login"}}
+      Don't have an account? <a href="/register">Register</a>
+    {{else}}
+      Already have an account? <a href="/login">Login</a>
+    {{end}}
+  </p>
+</main>
+{{end}}

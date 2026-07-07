@@ -1,6 +1,7 @@
 package db
 
 import (
+	"cotests/internal/auth"
 	"time"
 
 	"gorm.io/gorm"
@@ -25,4 +26,17 @@ type Session struct {
 
 func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(&User{}, &Session{})
+}
+
+func (u *User) SetPassword(p string) error {
+	password_hash, err := auth.HashPassword(p)
+	if err != nil {
+		return err
+	}
+	u.PasswordHash = password_hash
+	return nil
+}
+
+func (u *User) CheckPassword(p string) bool {
+	return auth.CheckPassword(p, u.PasswordHash)
 }

@@ -232,6 +232,7 @@ h3 {
 /* ---- Input Fields ---- */
 input[type="text"],
 input[type="email"],
+input[type="password"],
 input[type="search"],
 textarea {
   font-family: var(--font-body);
@@ -248,6 +249,7 @@ textarea {
 
 input[type="text"]:focus,
 input[type="email"]:focus,
+input[type="password"]:focus,
 input[type="search"]:focus,
 textarea:focus {
   box-shadow: 0 0 0 0.5px var(--primary);

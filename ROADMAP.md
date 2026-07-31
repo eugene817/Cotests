@@ -30,6 +30,9 @@ Goal: application skeleton, router, database, authentication, and base UI.
 - Add password hashing with `golang.org/x/crypto/bcrypt`.
 
 `[-]` **Session 5-6 — Authentication & authorization**
+
+> Detailed plan: [AUTH.md](./AUTH.md)
+
 - Backend registration and login.
 - Issue HTTP-only session cookies.
 - Add `Role` field to `User` (`admin` / `user`).

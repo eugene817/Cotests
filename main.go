@@ -44,7 +44,7 @@ func main() {
 		log.Fatalf("templates: %v", err)
 	}
 
-	r := server.NewRouter(database, sqlDB, http.FileServer(http.FS(sub)), tpl)
+	r := server.NewRouter(database, http.FileServer(http.FS(sub)), tpl)
 
 	go func() {
 		quit := make(chan os.Signal, 1)

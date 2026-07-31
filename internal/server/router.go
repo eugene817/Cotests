@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -9,11 +8,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewRouter(db *gorm.DB, sqlDB *sql.DB, staticHandler http.Handler, tpl Template) chi.Router {
+func NewRouter(db *gorm.DB, staticHandler http.Handler, tpl Template) chi.Router {
 	h := &Handler{
-		DB:    db,
-		SQLDB: sqlDB,
-		Tpl:   tpl,
+		DB:  db,
+		Tpl: tpl,
 	}
 
 	r := chi.NewRouter()

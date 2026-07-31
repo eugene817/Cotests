@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"database/sql"
 	"fmt"
 	"html/template"
 	"io"
@@ -17,9 +16,8 @@ import (
 )
 
 type Handler struct {
-	DB    *gorm.DB
-	SQLDB *sql.DB
-	Tpl   Template
+	DB  *gorm.DB
+	Tpl Template
 }
 
 type Template interface {
@@ -27,7 +25,13 @@ type Template interface {
 }
 
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	if err := h.SQLDB.Ping(); err != nil {
+	SQLDB, err := h.DB.DB()
+	if err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprintf(w, "db: %v", err)
+		return
+	}
+	if err := SQLDB.Ping(); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintf(w, "db: %v", err)
 		return

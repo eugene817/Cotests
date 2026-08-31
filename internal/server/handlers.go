@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -16,8 +17,9 @@ import (
 )
 
 type Handler struct {
-	DB  *gorm.DB
-	Tpl Template
+	DB            *gorm.DB
+	Tpl           Template
+	SecureCookies bool
 }
 
 type Template interface {
@@ -41,13 +43,12 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
-	user := h.getUser(r)
 	data := PageData{
 		Title:    "Home",
-		User:     user,
+		User:     UserFromContext(r.Context()),
 		Template: "home",
 	}
-	h.render(w, "layout", data)
+	h.render(w, "layout", h.withCSRFToken(w, r, data))
 }
 
 func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +58,7 @@ func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 		Action:   "/login",
 		Template: "auth_form",
 	}
-	h.render(w, "layout", data)
+	h.render(w, "layout", h.withCSRFToken(w, r, data))
 }
 
 func (h *Handler) RegisterPage(w http.ResponseWriter, r *http.Request) {
@@ -67,75 +68,96 @@ func (h *Handler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 		Action:   "/register",
 		Template: "auth_form",
 	}
-	h.render(w, "layout", data)
+	h.render(w, "layout", h.withCSRFToken(w, r, data))
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	email := strings.TrimSpace(r.FormValue("email"))
-	password := r.FormValue("password")
-	name := strings.TrimSpace(r.FormValue("name"))
+	email, password, name, err := readAuthForm(w, r)
+	if err != nil {
+		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !h.validCSRFToken(r) {
+		h.renderAuthError(w, r, "register", "Your form has expired. Please try again.", http.StatusForbidden)
+		return
+	}
 
-	if email == "" || password == "" {
-		h.renderAuthError(w, r, "register", "Email and password are required")
+	if err := validateCredentials(email, password); err != nil {
+		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	user, err := db.CreateUser(h.DB, email, password, name)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
-			h.renderAuthError(w, r, "register", "This email is already taken")
+		if db.IsDuplicateError(err) {
+			h.renderAuthError(w, r, "register", "This email is already taken", http.StatusConflict)
 		} else {
-			h.renderAuthError(w, r, "register", "Registration failed. Please try again.")
+			log.Printf("create user: %v", err)
+			h.renderAuthError(w, r, "register", "Registration failed. Please try again.", http.StatusInternalServerError)
 		}
 		return
 	}
 
-	session, err := db.CreateSession(h.DB, user.ID)
+	_, token, err := db.CreateSession(h.DB, user.ID)
 	if err != nil {
 		log.Printf("session create: %v", err)
 		hxRedirect(w, r, "/login")
 		return
 	}
 
-	h.setSessionCookie(w, session.Token)
+	h.setSessionCookie(w, token)
 	hxRedirect(w, r, "/")
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	email := strings.TrimSpace(r.FormValue("email"))
-	password := r.FormValue("password")
+	email, password, _, err := readAuthForm(w, r)
+	if err != nil {
+		h.renderAuthError(w, r, "login", err.Error(), http.StatusBadRequest)
+		return
+	}
+	if !h.validCSRFToken(r) {
+		h.renderAuthError(w, r, "login", "Your form has expired. Please try again.", http.StatusForbidden)
+		return
+	}
 
-	if email == "" || password == "" {
-		h.renderAuthError(w, r, "login", "Email and password are required")
+	if err := validateCredentials(email, password); err != nil {
+		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusBadRequest)
 		return
 	}
 
 	user, err := db.GetUserByEmail(h.DB, email)
 	if err != nil {
-		h.renderAuthError(w, r, "login", "Invalid email or password")
+		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 	if !user.CheckPassword(password) {
-		h.renderAuthError(w, r, "login", "Invalid email or password")
+		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusUnauthorized)
 		return
 	}
 
-	session, err := db.CreateSession(h.DB, user.ID)
+	_, token, err := db.CreateSession(h.DB, user.ID)
 	if err != nil {
-		h.renderAuthError(w, r, "login", "Login failed. Please try again.")
+		log.Printf("session create: %v", err)
+		h.renderAuthError(w, r, "login", "Login failed. Please try again.", http.StatusInternalServerError)
 		return
 	}
 
-	h.setSessionCookie(w, session.Token)
+	h.setSessionCookie(w, token)
 	hxRedirect(w, r, "/")
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	if !h.validCSRFToken(r) {
+		renderAccessError(w, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
+		return
+	}
 	cookie, err := r.Cookie("session_token")
 	if err == nil {
 		session, err := db.GetSessionByToken(h.DB, cookie.Value)
 		if err == nil {
-			db.DeleteSession(h.DB, session.ID)
+			if err := db.DeleteSession(h.DB, session.ID); err != nil {
+				log.Printf("delete session: %v", err)
+			}
 		}
 	}
 
@@ -145,29 +167,10 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.SecureCookies,
 	})
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func (h *Handler) getUser(r *http.Request) *db.User {
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		return nil
-	}
-
-	session, err := db.GetSessionByToken(h.DB, cookie.Value)
-	if err != nil {
-		return nil
-	}
-	if time.Now().After(session.ExpiresAt) {
-		return nil
-	}
-
-	var user db.User
-	if err := h.DB.First(&user, session.UserID).Error; err != nil {
-		return nil
-	}
-	return &user
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
@@ -177,6 +180,8 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		MaxAge:   int(7 * 24 * time.Hour / time.Second),
 		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   h.SecureCookies,
 	})
 }
 
@@ -199,7 +204,7 @@ func (h *Handler) render(w http.ResponseWriter, name string, data any) {
 	}
 }
 
-func (h *Handler) renderAuthError(w http.ResponseWriter, r *http.Request, mode, message string) {
+func (h *Handler) renderAuthError(w http.ResponseWriter, r *http.Request, mode, message string, status int) {
 	title := "Login"
 	if mode == "register" {
 		title = "Register"
@@ -212,10 +217,64 @@ func (h *Handler) renderAuthError(w http.ResponseWriter, r *http.Request, mode, 
 		Template: "auth_form",
 	}
 	name := "layout"
-	if r.Header.Get("HX-Request") == "true" {
+	if isHTMX(r) {
 		name = "auth_form"
 	}
+	data = h.withCSRFToken(w, r, data)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	h.render(w, name, data)
+}
+
+func (h *Handler) AdminDashboard(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Admin", User: UserFromContext(r.Context()), Template: "admin"}
+	h.render(w, "layout", h.withCSRFToken(w, r, data))
+}
+
+func (h *Handler) withCSRFToken(w http.ResponseWriter, r *http.Request, data PageData) PageData {
+	if cookie, err := r.Cookie(csrfCookieName); err == nil && cookie.Value != "" {
+		data.CSRFToken = cookie.Value
+		return data
+	}
+	token, err := generateCSRFToken()
+	if err != nil {
+		log.Printf("generate csrf token: %v", err)
+		return data
+	}
+	http.SetCookie(w, &http.Cookie{Name: csrfCookieName, Value: token, Path: "/", MaxAge: int(7 * 24 * time.Hour / time.Second), SameSite: http.SameSiteLaxMode, Secure: h.SecureCookies})
+	data.CSRFToken = token
+	return data
+}
+
+func (h *Handler) validCSRFToken(r *http.Request) bool {
+	cookie, err := r.Cookie(csrfCookieName)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+	token := r.Header.Get("X-CSRF-Token")
+	if token == "" {
+		token = r.FormValue("csrf_token")
+	}
+	return constantTimeEqual(cookie.Value, token)
+}
+
+func readAuthForm(w http.ResponseWriter, r *http.Request) (email, password, name string, err error) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	if err := r.ParseForm(); err != nil {
+		return "", "", "", fmt.Errorf("invalid form submission")
+	}
+	return strings.ToLower(strings.TrimSpace(r.Form.Get("email"))), r.Form.Get("password"), strings.TrimSpace(r.Form.Get("name")), nil
+}
+
+func validateCredentials(email, password string) error {
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email {
+		return fmt.Errorf("enter a valid email address")
+	}
+	if len(password) < 8 || len(password) > 72 {
+		return fmt.Errorf("password must be between 8 and 72 characters")
+	}
+	return nil
 }
 
 func hxRedirect(w http.ResponseWriter, r *http.Request, url string) {

@@ -10,6 +10,7 @@
 
   <form class="card" style="display:flex; flex-direction:column; gap:var(--spacing-4);"
         method="post" action="{{.Action}}" hx-post="{{.Action}}" hx-target="body" hx-swap="outerHTML">
+	<input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     {{if eq .Mode "register"}}
       <div>
         <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Name</label>
@@ -22,7 +23,8 @@
     </div>
     <div>
       <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Password</label>
-      <input type="password" name="password" required placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+        <input type="password" name="password" required minlength="8" maxlength="72" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+        <p class="label-sm" style="margin-top:var(--spacing-1);">8 to 72 characters</p>
     </div>
     <button class="btn btn-primary" type="submit">
       {{if eq .Mode "login"}}Login{{else}}Register{{end}}

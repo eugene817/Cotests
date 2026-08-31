@@ -2,6 +2,7 @@ package db
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -16,29 +17,37 @@ func GenerateToken() (string, error) {
 	return fmt.Sprintf("%x", b), nil
 }
 
-func CreateSession(database *gorm.DB, userID uint) (*Session, error) {
+func CreateSession(database *gorm.DB, userID uint) (*Session, string, error) {
+	if err := DeleteExpiredSessions(database); err != nil {
+		return nil, "", fmt.Errorf("delete expired sessions: %w", err)
+	}
 	token, err := GenerateToken()
 	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
+		return nil, "", fmt.Errorf("generate token: %w", err)
 	}
 	session := &Session{
 		UserID:    userID,
-		Token:     token,
+		TokenHash: hashToken(token),
 		ExpiresAt: time.Now().Add(time.Hour * 24 * 7),
 	}
 	if err := database.Create(session).Error; err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return session, nil
+	return session, token, nil
 }
 
 func GetSessionByToken(database *gorm.DB, token string) (*Session, error) {
 	var session Session
-	if err := database.Where("token = ?", token).First(&session).Error; err != nil {
+	if err := database.Where("token_hash = ?", hashToken(token)).First(&session).Error; err != nil {
 		return nil, err
 	}
 	return &session, nil
+}
+
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", hash[:])
 }
 
 func DeleteSession(database *gorm.DB, sessionID uint) error {

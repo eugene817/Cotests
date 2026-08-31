@@ -21,7 +21,8 @@ func Open(dsn string) (*gorm.DB, error) {
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: gormlogger.Default.LogMode(gormlogger.Warn),
+		Logger:         gormlogger.Default.LogMode(gormlogger.Warn),
+		TranslateError: true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("db open: %w", err)
@@ -31,9 +32,12 @@ func Open(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db underlying: %w", err)
 	}
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
-	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	if !isPostgres(dsn) {
+		// SQLite permits only one writer, so serialise access through one connection.
+		sqlDB.SetMaxOpenConns(1)
+		sqlDB.SetMaxIdleConns(1)
+		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	}
 
 	if err := sqlDB.Ping(); err != nil {
 		return nil, fmt.Errorf("db ping: %w", err)

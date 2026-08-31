@@ -6,11 +6,12 @@ import (
 )
 
 type PageData struct {
-	Title    string
-	User     *db.User
-	Error    string
-	Mode     string
-	Action   string
-	Template string
-	Content  template.HTML
+	Title     string
+	User      *db.User
+	Error     string
+	Mode      string
+	Action    string
+	Template  string
+	Content   template.HTML
+	CSRFToken string
 }

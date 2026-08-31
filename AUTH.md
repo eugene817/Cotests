@@ -6,7 +6,7 @@ For the project goals and constraints, see [ROADMAP.md](./ROADMAP.md).
 
 ---
 
-## Current State (as of Session 4)
+## Current State (Phase 1 complete)
 
 Cotests already has a working local authentication stack:
 
@@ -14,9 +14,14 @@ Cotests already has a working local authentication stack:
 - Password hashing with `bcrypt`.
 - Session tokens stored in HTTP-only cookies.
 - Registration, login, and logout handlers.
+- `admin` and `user` roles, with the first registered user promoted to `admin`.
+- Request-context identity middleware plus login and role guards.
+- An admin-only `/admin` dashboard placeholder and role-aware navigation.
+- CSRF validation for every POST endpoint.
+- Hashed session tokens at rest; HTTP-only, SameSite cookies.
 - Graceful shutdown closes the database connection pool.
 
-The next milestone is to add **roles** and **authorization middleware** so that admin-only areas (e.g., `/admin/*`) can be protected.
+Phase 2 can now add contest-management routes under `/admin/*` using the existing role middleware.
 
 ---
 
@@ -147,8 +152,10 @@ r.Group(func(r chi.Router) {
 ## Session Hygiene
 
 - `logout` already deletes the session record from the database.
-- Expired sessions are cleaned up opportunistically on login/logout and can later be moved to a background goroutine if needed.
-- Session cookies are HTTP-only, `Path: "/"`, and have a fixed `MaxAge` matching the DB expiry.
+- Expired sessions are cleaned up opportunistically when sessions are created and when an expired token is presented.
+- Session cookies are HTTP-only, `SameSite=Lax`, `Path: "/"`, and have a fixed `MaxAge` matching the DB expiry. Set `SECURE_COOKIES=true` in HTTPS deployments.
+- The random cookie token is SHA-256 hashed before persistence. Existing raw-token sessions are revoked by the migration.
+- POST endpoints compare a form or `X-CSRF-Token` token against the `csrf_token` cookie using a constant-time comparison.
 
 ---
 
@@ -171,36 +178,26 @@ No route-level code should change because middleware depends only on `IdentityPr
 
 ### Session 5 — Roles and Admin Promotion
 
-- [ ] Add `Role string` field to `internal/db/models.go`.
-- [ ] Run `go build` to verify GORM `AutoMigrate` picks up the change.
-- [ ] Update `CreateUser` to promote the first registered user to `admin`.
-- [ ] Add `internal/db/users.go` helper: `IsFirstUser(database) bool` or inline the count check.
+- [x] Add `Role string` field to `internal/db/models.go`.
+- [x] Update `CreateUser` to promote the first registered user to `admin`.
 
 ### Session 6 — Authorization Middleware
 
-- [ ] Define `IdentityProvider` interface.
-- [ ] Move session-to-user resolution into `CookieSessionProvider`.
-- [ ] Implement `AuthMiddleware`, `RequireAuth`, and `RequireRole`.
-- [ ] Wire middleware into `NewRouter`.
-- [ ] Protect `/admin` with `RequireAuth` + `RequireRole("admin")`.
-- [ ] Add `AdminDashboard` handler placeholder.
+- [x] Define `IdentityProvider` interface and `CookieSessionProvider`.
+- [x] Implement and wire `AuthMiddleware`, `RequireAuth`, and `RequireRole`.
+- [x] Protect `/admin` with `RequireAuth` + `RequireRole("admin")`.
+- [x] Add `AdminDashboard` handler placeholder.
 
 ### Session 7 — Role-Aware UI
 
-- [ ] Update `PageData` if needed (no new fields required if `User` is already present).
-- [ ] Update `layout.html` to show admin link only for `admin` users.
-- [ ] Add `/admin` page template stub.
-- [ ] Test flows:
-  - [ ] First registration → user becomes admin → `/admin` accessible.
-  - [ ] Second registration → user role → `/admin` returns 403.
-  - [ ] Logout → `/admin` redirects to `/login`.
+- [x] Update `layout.html` to show the admin link only for admins.
+- [x] Add `/admin` page template stub.
+- [x] Test first-user promotion, access for `admin`, denial for `user`, and login redirect for guests.
 
 ---
 
-## Open Decisions
+## Resolved Decisions
 
-These should be resolved before coding starts:
-
-1. **403 behavior for HTMX:** return a small error fragment, redirect to `/login`, or render a full "Access Denied" page?
-2. **Role sync with Keycloak:** when Keycloak arrives, will `User.Role` remain the source of truth, or will roles be read from the OIDC token on every request?
-3. **Session cleanup frequency:** opportunistic cleanup only, or a background goroutine every N minutes?
+1. HTMX requests without access receive a small error fragment. Normal requests from guests redirect to `/login`; authenticated users without a required role receive 403.
+2. Session cleanup is opportunistic. A background cleanup job can be introduced if the deployment requires it.
+3. The future Keycloak role-sync policy remains open and should be decided when OIDC integration is scheduled.

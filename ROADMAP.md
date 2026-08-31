@@ -29,20 +29,23 @@ Goal: application skeleton, router, database, authentication, and base UI.
 - Create `User` and `Session` models.
 - Add password hashing with `golang.org/x/crypto/bcrypt`.
 
-`[-]` **Session 5-6 — Authentication & authorization**
+`[x]` **Session 5-6 — Authentication & authorization**
 
 > Detailed plan: [AUTH.md](./AUTH.md)
 
-- Backend registration and login.
-- Issue HTTP-only session cookies.
-- Add `Role` field to `User` (`admin` / `user`).
-- Implement chi middleware: require login, require admin role, require user role.
-- First registered user is automatically promoted to `admin`.
+- Backend registration, login, logout, CSRF validation, and session cleanup.
+- Issue HTTP-only, SameSite session cookies and store token hashes only.
+- Add `Role` field to `User` (`admin` / `user`) and promote the first user to `admin`.
+- Implement chi middleware: load identity, require login, and require roles.
 
-`[-]` **Session 7 — Base UI**
+`[x]` **Session 7 — Base UI**
 - Shared `layout.html` with header and navigation.
-- Role-aware navigation links (e.g., admin dashboard visible only to admins).
-- Base `home.html`, `auth_form.html`, and error rendering via HTMX.
+- Role-aware navigation links and an admin dashboard placeholder.
+- Base `home.html`, `auth_form.html`, and HTMX-compatible access-denied fragments.
+
+`[x]` **Phase 1 verification**
+- Automated checks: `go test ./...`, `go test -race ./...`, `go vet ./...`, and `go build`.
+- Manual check on a clean SQLite database: registration, first-user admin promotion, guest redirect from `/admin`, and admin dashboard access.
 
 ---
 
@@ -54,6 +57,8 @@ Goal: CRUD for contests, series, tasks, and tests under `/admin/*`.
 - `Contest` model (title, description, start/end dates, visibility).
 - `Series` model (title, order) belonging to a contest.
 - Set up hierarchy and cascade deletes.
+- Add SQLite-backed model and migration tests for constraints, ordering, and cascade deletion.
+- Exit criterion: an admin can create a contest with ordered series through the data layer; non-admin access remains denied.
 
 `[ ]` **Session 10-11 — Admin HTMX CRUD for Contests & Series**
 - List views and create/edit/delete forms using HTMX fragments.

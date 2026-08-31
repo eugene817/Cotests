@@ -18,9 +18,11 @@
     <span>
       {{if .User}}
         <span class="label-sm" style="margin-right:var(--spacing-4);">{{.User.Email}}</span>
+        {{if eq .User.Role "admin"}}<a href="/admin" class="btn btn-tertiary">Admin</a>{{end}}
         <button class="btn btn-tertiary" hx-post="/logout" hx-target="body" hx-swap="outerHTML">Logout</button>
       {{else}}
         <a href="/login" class="btn btn-tertiary">Login</a>
+        <a href="/register" class="btn btn-tertiary">Register</a>
       {{end}}
     </span>
   </nav>

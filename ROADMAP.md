@@ -44,7 +44,9 @@ Goal: application skeleton, router, database, authentication, and base UI.
 - Base `home.html`, `auth_form.html`, and HTMX-compatible access-denied fragments.
 
 `[x]` **Phase 1 verification**
+- Shared test helpers provide isolated SQLite databases, users, sessions, HTTP forms, and CSRF cookies.
 - Automated checks: `go test ./...`, `go test -race ./...`, `go vet ./...`, and `go build`.
+- GitHub Actions runs `go mod download`, `go vet ./...`, and `go test -race ./...` for pull requests and pushes to `main`.
 - Manual check on a clean SQLite database: registration, first-user admin promotion, guest redirect from `/admin`, and admin dashboard access.
 
 ---

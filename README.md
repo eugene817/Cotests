@@ -1,5 +1,7 @@
 # Cotests
 
+[![CI](https://github.com/eugene817/Cotests/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eugene817/Cotests/actions/workflows/ci.yml)
+
 Single-binary programming contest and quiz platform built with Go, chi, HTMX, GORM, and SQLite (with optional PostgreSQL).
 
 ## Quick start

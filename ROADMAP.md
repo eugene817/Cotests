@@ -44,14 +44,18 @@ Goal: application skeleton, router, database, authentication, and base UI.
 - Base `home.html`, `auth_form.html`, and HTMX-compatible access-denied fragments.
 
 `[x]` **Phase 1 verification**
+- Shared test helpers provide isolated SQLite databases, users, sessions, HTTP forms, and CSRF cookies.
 - Automated checks: `go test ./...`, `go test -race ./...`, `go vet ./...`, and `go build`.
+- GitHub Actions runs `go mod download`, `go vet ./...`, and `go test -race ./...` for pull requests and pushes to `main`.
 - Manual check on a clean SQLite database: registration, first-user admin promotion, guest redirect from `/admin`, and admin dashboard access.
 
 ---
 
-## Phase 2 — Admin Domain Model (Weeks 3-5)
+## Phase 2 — Interface & Content Draft (Weeks 3-5)
 
-Goal: CRUD for contests, series, tasks, and tests under `/admin/*`.
+Goal: a usable admin and participant interface for contest content. This phase does
+not execute submissions or store test cases; the submit action shows an explicit
+"judging is not available yet" placeholder.
 
 `[ ]` **Session 8-9 — Contests and Series**
 - `Contest` model (title, description, start/end dates, visibility).
@@ -73,9 +77,12 @@ Goal: CRUD for contests, series, tasks, and tests under `/admin/*`.
 - PDF statement upload stored as a BLOB column in SQLite.
 - Dedicated route to serve the PDF back to the browser.
 
-`[ ]` **Session 16-17 — Tests**
-- `Test` model: input, expected output, points, per-test time/memory limits.
-- Manual UI for adding and editing test cases.
+`[ ]` **Session 16-17 — Participant interface and judge placeholder**
+- Public contest and series lists respecting visibility and active dates.
+- Task page with statement, limits, points, and available languages.
+- Submit form with a language selector and source-code textarea.
+- A CSRF-protected HTMX endpoint returns a clear placeholder: the solution is not saved or judged until Phase 3.
+- Exit criterion: both roles can complete their content-browsing workflows, while no user can mistake the placeholder for a verdict.
 
 ---
 
@@ -83,7 +90,9 @@ Goal: CRUD for contests, series, tasks, and tests under `/admin/*`.
 
 Goal: compile, execute, and judge user submissions safely.
 
-`[ ]` **Session 18-19 — Submissions and worker pool**
+`[ ]` **Session 18-19 — Tests, submissions, and worker pool**
+- `Test` model: input, expected output, points, per-test time/memory limits.
+- Admin-only UI for adding and editing test cases.
 - `Submission` model: code, language, status, runtime, memory, score.
 - Goroutine + channel worker pool for processing the submission queue.
 
@@ -107,21 +116,16 @@ Goal: compile, execute, and judge user submissions safely.
 
 ---
 
-## Phase 4 — User Interface (Weeks 10-12)
+## Phase 4 — Submission Experience (Weeks 10-12)
 
-Goal: contest participants can browse tasks and submit solutions.
+Goal: replace the Phase 2 placeholder with a complete participant submission experience.
 
-`[ ]` **Session 30-31 — Contest listings**
-- User-facing contest and series lists.
-- Respect active dates and hide inactive/future contests.
+`[ ]` **Session 30-31 — Connect submissions to the judge**
+- Replace the placeholder endpoint with submission persistence and queueing.
+- Preserve the Phase 2 task page and submit form.
 
-`[ ]` **Session 32-33 — Task page**
-- Display task statement (PDF or text).
-- Show time/memory limits and allowed languages.
-
-`[ ]` **Session 34-35 — Submit solution**
-- Language selector and code textarea (or file upload).
-- HTMX form submission.
+`[ ]` **Session 32-33 — Submission history**
+- Show a participant's previous submissions, verdicts, score, time, and memory.
 
 `[ ]` **Session 36-38 — Live status updates**
 - HTMX polling (`hx-trigger="every 2s"`) or Server-Sent Events (SSE) in Go.

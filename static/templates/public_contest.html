@@ -1,0 +1,26 @@
+{{define "public_contest"}}
+<main class="page page-wide">
+  <a class="btn btn-link" href="/contests">Back to contests</a>
+  <p class="eyebrow">Open contest</p>
+  <div class="page-heading">
+    <div>
+      <h1>{{.Contest.Title}}</h1>
+      {{if .Contest.Description}}<p class="lead">{{.Contest.Description}}</p>{{end}}
+    </div>
+  </div>
+
+  <section class="stack">
+    <h2>Series</h2>
+    {{if .Series}}
+      {{range .Series}}
+        <article class="card series-card">
+          <p class="eyebrow">Series {{.Position}}</p>
+          <h3>{{.Title}}</h3>
+        </article>
+      {{end}}
+    {{else}}
+      <div class="empty-state"><h3>No series yet</h3><p>Tasks will be published here as the contest is prepared.</p></div>
+    {{end}}
+  </section>
+</main>
+{{end}}

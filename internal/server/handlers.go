@@ -170,7 +170,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   h.SecureCookies,
 	})
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	hxRedirect(w, r, "/")
 }
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, token string) {
@@ -218,17 +218,12 @@ func (h *Handler) renderAuthError(w http.ResponseWriter, r *http.Request, mode, 
 	}
 	name := "layout"
 	if isHTMX(r) {
-		name = "auth_form"
+		name = "auth_form_content"
 	}
 	data = h.withCSRFToken(w, r, data)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	h.render(w, name, data)
-}
-
-func (h *Handler) AdminDashboard(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Admin", User: UserFromContext(r.Context()), Template: "admin"}
-	h.render(w, "layout", h.withCSRFToken(w, r, data))
 }
 
 func (h *Handler) withCSRFToken(w http.ResponseWriter, r *http.Request, data PageData) PageData {

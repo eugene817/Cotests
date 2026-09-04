@@ -57,16 +57,20 @@ Goal: a usable admin and participant interface for contest content. This phase d
 not execute submissions or store test cases; the submit action shows an explicit
 "judging is not available yet" placeholder.
 
-`[ ]` **Session 8-9 — Contests and Series**
+`[x]` **Session 8-9 — Contests and Series**
 - `Contest` model (title, description, start/end dates, visibility).
 - `Series` model (title, order) belonging to a contest.
 - Set up hierarchy and cascade deletes.
 - Add SQLite-backed model and migration tests for constraints, ordering, and cascade deletion.
 - Exit criterion: an admin can create a contest with ordered series through the data layer; non-admin access remains denied.
 
-`[ ]` **Session 10-11 — Admin HTMX CRUD for Contests & Series**
+`[x]` **Session 10-11 — Admin HTMX CRUD for Contests & Series**
 - List views and create/edit/delete forms using HTMX fragments.
 - Admin-only routes protected by middleware.
+
+`[ ]` **Responsive interface polish**
+- Rework navigation, form grids, buttons, and cards for narrow screens without horizontal overflow.
+- Verify the public and admin flows at mobile, tablet, and desktop breakpoints.
 
 `[ ]` **Session 12-13 — Tasks**
 - `Task` model with metadata: RAM/CPU limits, allowed languages, points.

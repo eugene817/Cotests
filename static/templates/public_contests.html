@@ -1,0 +1,27 @@
+{{define "public_contests"}}
+<main class="page page-wide">
+  <p class="eyebrow">Programming contests</p>
+  <div class="page-heading">
+    <div>
+      <h1>Open contests</h1>
+      <p class="lead">Browse current public contests and their problem series.</p>
+    </div>
+    {{if .User}}{{if eq .User.Role "admin"}}<a class="btn btn-secondary" href="/admin/contests">Manage contests</a>{{end}}{{end}}
+  </div>
+
+  <section id="contest-list" class="stack">
+    {{if .Contests}}
+      {{range .Contests}}
+        <article class="card contest-card">
+          <p class="eyebrow">Open contest</p>
+          <h2>{{.Title}}</h2>
+          {{if .Description}}<p class="card-copy">{{.Description}}</p>{{end}}
+          <div class="card-actions"><a class="btn btn-primary" href="/contests/{{.ID}}">View contest</a></div>
+        </article>
+      {{end}}
+    {{else}}
+      <div class="empty-state"><h2>No open contests</h2><p>Published contests will appear here when their schedule begins.</p></div>
+    {{end}}
+  </section>
+</main>
+{{end}}

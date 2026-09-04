@@ -13,13 +13,17 @@
   <script src="/static/js/app.js"></script>
 </head>
 <body>
-  <nav class="glass glass-nav" style="display:flex; align-items:center; justify-content:space-between;">
-    <span class="label" style="font-family:var(--font-display); font-size:1.25rem; color:var(--primary);">Cotests</span>
-    <span>
+  <nav class="glass glass-nav" style="display:flex; align-items:center; justify-content:space-between; gap:var(--spacing-3);">
+    <a href="/" class="label" style="font-family:var(--font-display); font-size:1.25rem; color:var(--primary); text-decoration:none;">Cotests</a>
+    <span style="display:flex; align-items:center; gap:var(--spacing-2);">
+      <a href="/contests" class="btn btn-tertiary">Contests</a>
       {{if .User}}
-        <span class="label-sm" style="margin-right:var(--spacing-4);">{{.User.Email}}</span>
-        {{if eq .User.Role "admin"}}<a href="/admin" class="btn btn-tertiary">Admin</a>{{end}}
-        <button class="btn btn-tertiary" hx-post="/logout" hx-target="body" hx-swap="outerHTML">Logout</button>
+        <span class="label-sm" style="margin-left:var(--spacing-2);">{{.User.Email}}</span>
+        {{if eq .User.Role "admin"}}<a href="/admin/contests" class="btn btn-tertiary">Admin</a>{{end}}
+        <form method="post" action="/logout" hx-post="/logout" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+          <button class="btn btn-tertiary" type="submit">Logout</button>
+        </form>
       {{else}}
         <a href="/login" class="btn btn-tertiary">Login</a>
         <a href="/register" class="btn btn-tertiary">Register</a>

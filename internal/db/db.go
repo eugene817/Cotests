@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -21,7 +22,10 @@ func Open(dsn string) (*gorm.DB, error) {
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger:         gormlogger.Default.LogMode(gormlogger.Warn),
+		Logger: gormlogger.New(log.Default(), gormlogger.Config{
+			LogLevel:                  gormlogger.Warn,
+			IgnoreRecordNotFoundError: true,
+		}),
 		TranslateError: true,
 	})
 	if err != nil {
@@ -37,6 +41,9 @@ func Open(dsn string) (*gorm.DB, error) {
 		sqlDB.SetMaxOpenConns(1)
 		sqlDB.SetMaxIdleConns(1)
 		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+		if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+			return nil, fmt.Errorf("enable sqlite foreign keys: %w", err)
+		}
 	}
 
 	if err := sqlDB.Ping(); err != nil {

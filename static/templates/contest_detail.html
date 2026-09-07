@@ -1,0 +1,80 @@
+{{define "contest_detail"}}
+<main class="page page-wide">
+  <a class="btn btn-link" href="/admin/contests">Back to contests</a>
+  <p class="eyebrow" style="margin-top:var(--spacing-6)">Administration</p>
+  <h1 style="margin-top:0; margin-bottom:var(--spacing-8)">{{.Contest.Title}}</h1>
+
+  <section class="card" style="margin-bottom:var(--spacing-8)">
+    <div class="card-header"><h3>Contest details</h3></div>
+    <div id="contest-details-error" aria-live="polite"></div>
+    <form method="post" action="/admin/contests/{{.Contest.ID}}" hx-post="/admin/contests/{{.Contest.ID}}" hx-target="#contest-details-error" style="display:grid; gap:var(--spacing-4)">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div>
+        <label class="label-sm" for="contest-title">Title</label>
+        <input id="contest-title" type="text" name="title" required value="{{.Contest.Title}}">
+      </div>
+      <div>
+        <label class="label-sm" for="contest-description">Description</label>
+        <textarea id="contest-description" name="description" rows="3">{{.Contest.Description}}</textarea>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(12rem, 1fr)); gap:var(--spacing-4)">
+        <div>
+          <label class="label-sm" for="contest-visibility">Visibility</label>
+          <select id="contest-visibility" name="visibility">
+            <option value="draft" {{if eq .Contest.Visibility "draft"}}selected{{end}}>Draft</option>
+            <option value="published" {{if eq .Contest.Visibility "published"}}selected{{end}}>Published</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm" for="contest-start">Starts at (UTC)</label>
+          <input id="contest-start" type="datetime-local" name="start_at" {{if .Contest.StartAt}}value="{{.Contest.StartAt.Format "2006-01-02T15:04"}}"{{end}}>
+        </div>
+        <div>
+          <label class="label-sm" for="contest-end">Ends at (UTC)</label>
+          <input id="contest-end" type="datetime-local" name="end_at" {{if .Contest.EndAt}}value="{{.Contest.EndAt.Format "2006-01-02T15:04"}}"{{end}}>
+        </div>
+      </div>
+      <div style="display:flex; gap:var(--spacing-4); flex-wrap:wrap">
+        <button class="btn btn-primary" type="submit">Save changes</button>
+      </div>
+    </form>
+    <form method="post" action="/admin/contests/{{.Contest.ID}}/delete" hx-post="/admin/contests/{{.Contest.ID}}/delete" hx-target="#contest-details-error" hx-confirm="Delete this contest and all its series?" style="margin-top:var(--spacing-4)">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <button class="btn btn-danger" type="submit">Delete contest</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-bottom:var(--spacing-8)">
+    <div class="card-header"><h3>Add series</h3></div>
+    <div id="create-series-error" aria-live="polite"></div>
+    <form method="post" action="/admin/contests/{{.Contest.ID}}/series" hx-post="/admin/contests/{{.Contest.ID}}/series" hx-target="#create-series-error" style="display:grid; grid-template-columns:1fr 8rem auto; gap:var(--spacing-4); align-items:end">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div><label class="label-sm" for="series-title">Title</label><input id="series-title" type="text" name="title" required></div>
+      <div><label class="label-sm" for="series-position">Position</label><input id="series-position" type="number" name="position" min="0" required></div>
+      <button class="btn btn-primary" type="submit">Add series</button>
+    </form>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:var(--spacing-4)">Series</h2>
+    {{if .Series}}
+      <div id="series-list" style="display:grid; gap:var(--spacing-4)">
+        {{range .Series}}
+          <article class="card">
+            <div id="series-error-{{.ID}}" aria-live="polite"></div>
+            <form method="post" action="/admin/contests/{{$.Contest.ID}}/series/{{.ID}}" hx-post="/admin/contests/{{$.Contest.ID}}/series/{{.ID}}" hx-target="#series-error-{{.ID}}" style="display:grid; grid-template-columns:1fr 8rem auto auto; gap:var(--spacing-4); align-items:end">
+              <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+              <div><label class="label-sm" for="series-title-{{.ID}}">Title</label><input id="series-title-{{.ID}}" type="text" name="title" required value="{{.Title}}"></div>
+              <div><label class="label-sm" for="series-position-{{.ID}}">Position</label><input id="series-position-{{.ID}}" type="number" name="position" min="0" required value="{{.Position}}"></div>
+              <button class="btn btn-secondary" type="submit">Save</button>
+              <button class="btn btn-danger" type="submit" formaction="/admin/contests/{{$.Contest.ID}}/series/{{.ID}}/delete" hx-post="/admin/contests/{{$.Contest.ID}}/series/{{.ID}}/delete" hx-target="closest article" hx-swap="outerHTML" hx-confirm="Delete this series?">Delete</button>
+            </form>
+          </article>
+        {{end}}
+      </div>
+    {{else}}
+      <div class="card surface-container-low"><p>No series yet.</p></div>
+    {{end}}
+  </section>
+</main>
+{{end}}

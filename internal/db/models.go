@@ -25,13 +25,37 @@ type Session struct {
 	CreatedAt time.Time
 }
 
+type Contest struct {
+	ID          uint   `gorm:"primaryKey"`
+	Title       string `gorm:"not null;check:title <> ''"`
+	Description string
+	Visibility  string     `gorm:"not null;default:draft;check:visibility IN ('draft','published');index"`
+	StartAt     *time.Time `gorm:"check:contest_dates,end_at IS NULL OR start_at IS NULL OR end_at > start_at"`
+	EndAt       *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Series      []Series `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+}
+
+type Series struct {
+	ID        uint   `gorm:"primaryKey"`
+	ContestID uint   `gorm:"not null;index;uniqueIndex:idx_series_contest_position,priority:1"`
+	Title     string `gorm:"not null;check:title <> ''"`
+	Position  int    `gorm:"not null;check:position >= 0;uniqueIndex:idx_series_contest_position,priority:2"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Contest   Contest
+}
+
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleAdmin        = "admin"
+	RoleUser         = "user"
+	ContestDraft     = "draft"
+	ContestPublished = "published"
 )
 
 func AutoMigrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&User{}, &Session{}); err != nil {
+	if err := db.AutoMigrate(&User{}, &Session{}, &Contest{}, &Series{}); err != nil {
 		return err
 	}
 	if db.Migrator().HasColumn(&Session{}, "token") {

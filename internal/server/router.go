@@ -29,6 +29,8 @@ func NewRouter(database *gorm.DB, staticHandler http.Handler, tpl Template, conf
 
 	r.Get("/health", h.Health)
 	r.Get("/", h.Home)
+	r.Get("/contests", h.PublicContests)
+	r.Get("/contests/{contestID}", h.PublicContest)
 	r.Get("/login", h.LoginPage)
 	r.Get("/register", h.RegisterPage)
 	r.Post("/register", h.Register)
@@ -37,7 +39,15 @@ func NewRouter(database *gorm.DB, staticHandler http.Handler, tpl Template, conf
 	r.Group(func(r chi.Router) {
 		r.Use(RequireAuth)
 		r.Use(RequireRole(db.RoleAdmin))
-		r.Get("/admin", h.AdminDashboard)
+		r.Get("/admin", h.AdminRedirect)
+		r.Get("/admin/contests", h.AdminDashboard)
+		r.Post("/admin/contests", h.CreateContest)
+		r.Get("/admin/contests/{contestID}", h.AdminContest)
+		r.Post("/admin/contests/{contestID}", h.UpdateContest)
+		r.Post("/admin/contests/{contestID}/delete", h.DeleteContest)
+		r.Post("/admin/contests/{contestID}/series", h.CreateSeries)
+		r.Post("/admin/contests/{contestID}/series/{seriesID}", h.UpdateSeries)
+		r.Post("/admin/contests/{contestID}/series/{seriesID}/delete", h.DeleteSeries)
 	})
 
 	return r

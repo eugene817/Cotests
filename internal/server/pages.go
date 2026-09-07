@@ -14,4 +14,7 @@ type PageData struct {
 	Template  string
 	Content   template.HTML
 	CSRFToken string
+	Contest   *db.Contest
+	Contests  []db.Contest
+	Series    []db.Series
 }

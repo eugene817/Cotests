@@ -1,40 +1,34 @@
 {{define "home"}}
-<main style="max-width: 720px; margin: 0 auto; padding: 0 var(--spacing-8) var(--spacing-16);">
-  <h1>The Digital&nbsp;Atelier</h1>
-  <p class="label" style="margin-bottom:var(--spacing-8)">A premium editorial experience for modern testing</p>
+<main class="page">
+  <p class="eyebrow">Cotests</p>
+  <h1 style="margin-top:0">A calm space for serious contests.</h1>
+  <p class="lead" style="margin-bottom:var(--spacing-8)">Create, publish, and explore programming contests without leaving the platform.</p>
 
   {{if .User}}
     <div class="card" style="margin-bottom:var(--spacing-8)">
       <div class="card-header"><h3>Welcome, {{.User.Email}}</h3></div>
-      <div class="card-body"><p>You are logged in.</p></div>
+      <div class="card-body"><p>Browse open contests, or manage content if you are an administrator.</p></div>
+      <a href="/contests" class="btn btn-primary">Explore contests</a>
     </div>
   {{else}}
     <div class="card" style="margin-bottom:var(--spacing-8)">
       <div class="card-header"><h3>Get Started</h3></div>
-      <div class="card-body"><p>Login or register to access the platform.</p></div>
-      <a href="/login" class="btn btn-primary">Login / Register</a>
+      <div class="card-body"><p>Browse open contests or create an account to participate.</p></div>
+      <div class="card-actions"><a href="/contests" class="btn btn-primary">View contests</a><a href="/register" class="btn btn-secondary">Create account</a></div>
     </div>
   {{end}}
 
   <div class="card" style="margin-bottom:var(--spacing-8)">
-    <div class="card-header"><h3>Session 2: GORM</h3></div>
+    <div class="card-header"><h3>Platform status</h3></div>
     <div class="card-body">
-      <p>SQLite via <code>github.com/glebarez/sqlite</code> — pure Go GORM driver. PostgreSQL support via <code>gorm.io/driver/postgres</code>. AutoMigrate from Go structs.</p>
+      <p>Check that the application and database are available.</p>
     </div>
-    <button class="btn btn-primary" hx-get="/health" hx-trigger="click" hx-target="#health" hx-swap="innerText">Health Check</button>
+    <button class="btn btn-secondary" hx-get="/health" hx-trigger="click" hx-target="#health" hx-swap="innerText">Check status</button>
   </div>
 
   <div id="health" class="label-sm surface-container-low" style="padding:var(--spacing-4); border-radius:var(--radius-base); min-height:2rem; margin-bottom:var(--spacing-8);">
     Click the button to check DB and server health.
   </div>
 
-  <div style="display:flex; gap:var(--spacing-4); flex-wrap:wrap;">
-    {{if .User}}
-      <button class="btn btn-primary" hx-post="/logout" hx-target="body" hx-swap="outerHTML">Logout</button>
-    {{else}}
-      <a href="/login" class="btn btn-primary">Login</a>
-      <a href="/register" class="btn btn-secondary">Register</a>
-    {{end}}
-  </div>
 </main>
 {{end}}

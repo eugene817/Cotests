@@ -21,7 +21,13 @@ func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 {{define "layout"}}{{.Content}}{{end}}
 {{define "home"}}home{{end}}
 {{define "auth_form"}}{{.Error}}<form><input value="{{.CSRFToken}}"></form>{{end}}
-{{define "admin"}}admin{{end}}`))
+{{define "auth_form_content"}}{{.Error}}<form><input value="{{.CSRFToken}}"></form>{{end}}
+{{define "admin"}}admin{{end}}
+{{define "contest_detail"}}contest detail{{end}}
+{{define "contest_card"}}{{.Title}}{{end}}
+{{define "admin_error"}}{{.Error}}{{end}}
+{{define "public_contests"}}public contests{{end}}
+{{define "public_contest"}}public contest{{end}}`))
 	return NewRouter(database, http.NotFoundHandler(), tpl, Config{SecureCookies: true}), database
 }
 

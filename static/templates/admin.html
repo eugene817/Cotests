@@ -1,10 +1,70 @@
 {{define "admin"}}
-<main style="max-width: 720px; margin: 0 auto; padding: var(--spacing-16) var(--spacing-8);">
-  <p class="label" style="margin-bottom:var(--spacing-2)">Administration</p>
-  <h1 style="margin-top:0; margin-bottom:var(--spacing-8)">Control room</h1>
-  <div class="card">
-    <div class="card-header"><h3>Contest management</h3></div>
-    <div class="card-body"><p>Administrative controls are ready. Contest, series, task, and test management will be added in Phase 2.</p></div>
-  </div>
+<main class="page page-wide">
+  <p class="eyebrow">Administration</p>
+  <div class="page-heading"><div><h1 style="margin-top:0">Contests</h1><p class="lead">Create and organise content before publishing it.</p></div><a class="btn btn-link" href="/contests">View public page</a></div>
+
+  <section class="card" style="margin-bottom:var(--spacing-8)">
+    <div class="card-header"><h3>Create contest</h3></div>
+    <div id="create-contest-error" aria-live="polite"></div>
+    <form method="post" action="/admin/contests" hx-post="/admin/contests" hx-target="#create-contest-error" style="display:grid; gap:var(--spacing-4)">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div>
+        <label class="label-sm" for="contest-title">Title</label>
+        <input id="contest-title" type="text" name="title" required>
+      </div>
+      <div>
+        <label class="label-sm" for="contest-description">Description</label>
+        <textarea id="contest-description" name="description" rows="3"></textarea>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(12rem, 1fr)); gap:var(--spacing-4)">
+        <div>
+          <label class="label-sm" for="contest-visibility">Visibility</label>
+          <select id="contest-visibility" name="visibility">
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+          </select>
+        </div>
+        <div>
+          <label class="label-sm" for="contest-start">Starts at (UTC)</label>
+          <input id="contest-start" type="datetime-local" name="start_at">
+        </div>
+        <div>
+          <label class="label-sm" for="contest-end">Ends at (UTC)</label>
+          <input id="contest-end" type="datetime-local" name="end_at">
+        </div>
+      </div>
+      <div><button class="btn btn-primary" type="submit">Create contest</button></div>
+    </form>
+  </section>
+
+  <section>
+    <h2 style="margin-bottom:var(--spacing-4)">All contests</h2>
+    <div id="contest-list" style="display:grid; gap:var(--spacing-4)">
+      {{if .Contests}}
+        {{range .Contests}}
+          {{template "contest_card" .}}
+        {{end}}
+      {{else}}
+        <div class="card surface-container-low empty-contests"><p>No contests yet. Create the first one above.</p></div>
+      {{end}}
+    </div>
+  </section>
 </main>
+{{end}}
+
+{{define "contest_card"}}
+<article class="card contest-card">
+  <div style="display:flex; align-items:start; justify-content:space-between; gap:var(--spacing-4)">
+    <div>
+      <p class="label-sm">{{.Visibility}}</p>
+      <h3>{{.Title}}</h3>
+      {{if .Description}}<p style="margin-top:var(--spacing-2)">{{.Description}}</p>{{end}}
+    </div>
+    <a class="btn btn-secondary" href="/admin/contests/{{.ID}}">Manage</a>
+  </div>
+</article>
+{{end}}
+
+{{define "admin_error"}}
+{{if .Error}}<div class="form-error" role="alert">{{.Error}}</div>{{end}}
 {{end}}

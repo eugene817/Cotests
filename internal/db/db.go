@@ -18,7 +18,13 @@ func Open(dsn string) (*gorm.DB, error) {
 	if isPostgres(dsn) {
 		dialector = postgres.Open(dsn)
 	} else {
-		dialector = sqlite.Open(dsn)
+		// Apply this on every physical connection, including pool replacements.
+		// Append after caller pragmas so foreign keys cannot be disabled by the DSN.
+		separator := "?"
+		if strings.Contains(dsn, "?") {
+			separator = "&"
+		}
+		dialector = sqlite.Open(dsn + separator + "_pragma=foreign_keys(1)")
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
@@ -41,12 +47,10 @@ func Open(dsn string) (*gorm.DB, error) {
 		sqlDB.SetMaxOpenConns(1)
 		sqlDB.SetMaxIdleConns(1)
 		sqlDB.SetConnMaxIdleTime(5 * time.Minute)
-		if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
-			return nil, fmt.Errorf("enable sqlite foreign keys: %w", err)
-		}
 	}
 
 	if err := sqlDB.Ping(); err != nil {
+		sqlDB.Close()
 		return nil, fmt.Errorf("db ping: %w", err)
 	}
 

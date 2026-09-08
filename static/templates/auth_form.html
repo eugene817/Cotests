@@ -19,18 +19,18 @@
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     {{if eq .Mode "register"}}
       <div>
-        <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Name</label>
-        <input type="text" name="name" placeholder="Your name">
+        <label class="label-sm" for="auth-name" style="display:block; margin-bottom:var(--spacing-2);">Name</label>
+        <input id="auth-name" type="text" name="name" autocomplete="name" placeholder="Your name">
       </div>
     {{end}}
     <div>
-      <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Email</label>
-      <input type="email" name="email" required placeholder="you@example.com">
+      <label class="label-sm" for="auth-email" style="display:block; margin-bottom:var(--spacing-2);">Email</label>
+      <input id="auth-email" type="email" name="email" autocomplete="username" required placeholder="you@example.com">
     </div>
     <div>
-      <label class="label-sm" style="display:block; margin-bottom:var(--spacing-2);">Password</label>
-        <input type="password" name="password" required minlength="8" maxlength="72" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
-        <p class="label-sm" style="margin-top:var(--spacing-1);">8 to 72 characters</p>
+      <label class="label-sm" for="auth-password" style="display:block; margin-bottom:var(--spacing-2);">Password</label>
+        <input id="auth-password" type="password" name="password" autocomplete="{{if eq .Mode "register"}}new-password{{else}}current-password{{end}}" required maxlength="72" aria-describedby="password-help" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;">
+        <p id="password-help" class="label-sm" style="margin-top:var(--spacing-1);">8–72 UTF-8 bytes. Accented letters and emoji may use more than one byte.</p>
     </div>
     <button class="btn btn-primary" type="submit">
       {{if eq .Mode "login"}}Login{{else}}Register{{end}}

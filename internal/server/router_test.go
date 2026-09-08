@@ -307,7 +307,7 @@ func TestAdminHTMXCreateAndDeleteSeriesReturnFragments(t *testing.T) {
 	createContest.Header.Set("HX-Request", "true")
 	contestResponse := httptest.NewRecorder()
 	router.ServeHTTP(contestResponse, createContest)
-	if contestResponse.Code != http.StatusOK || contestResponse.Header().Get("HX-Retarget") != "#contest-list" || contestResponse.Header().Get("HX-Reswap") != "afterbegin" || !strings.Contains(contestResponse.Body.String(), "HTMX Contest") {
+	if contestResponse.Code != http.StatusOK || contestResponse.Header().Get("HX-Retarget") != "#contest-list" || contestResponse.Header().Get("HX-Reswap") != "innerHTML" || !strings.Contains(contestResponse.Body.String(), "HTMX Contest") || strings.Contains(contestResponse.Body.String(), "No contests yet") {
 		t.Fatalf("HTMX create contest = %d %q %q", contestResponse.Code, contestResponse.Header().Get("HX-Retarget"), contestResponse.Body.String())
 	}
 
@@ -464,6 +464,9 @@ func TestValidateCredentials(t *testing.T) {
 		{"invalid email", "user", "password1", true},
 		{"short password", "user@example.com", "short", true},
 		{"long password", "user@example.com", strings.Repeat("a", 73), true},
+		{"multibyte minimum", "user@example.com", strings.Repeat("ą", 4), false},
+		{"multibyte maximum", "user@example.com", strings.Repeat("ą", 36), false},
+		{"multibyte too long", "user@example.com", strings.Repeat("ą", 37), true},
 	}
 
 	for _, tt := range tests {

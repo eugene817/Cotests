@@ -1,180 +1,108 @@
-# Cotests Roadmap
+# Cotests roadmap
 
-A single-binary programming contest and quiz platform built with Go, chi, HTMX, GORM, and SQLite (with optional PostgreSQL).
+Updated: 2026-09-08. Cotests is a remake of ZawodyWeb with additional functionality.
 
-## Legend
+**Current decision: the judge is a no-op placeholder with an interface. Its engine, protocol, checkers and scoring will be designed with the professor.** The web MVP must progress without implementing or selecting a judge.
 
-- `[x]` Completed
-- `[-]` In progress
-- `[ ]` Pending
+- [MVP.md](MVP.md): web MVP scope and C01–C15 work items.
+- [JUDGE.md](JUDGE.md): placeholder contract and deferred design decisions.
+- [FEATURE_PARITY.md](FEATURE_PARITY.md): eventual ZawodyWeb baseline.
+- [ARCHITECTURE.md](ARCHITECTURE.md): web application structure.
+- [CODE_REVIEW.md](CODE_REVIEW.md): findings, fixed items and remaining work.
+- [AUTH.md](AUTH.md): account and permission policies.
 
----
+## Current phase
 
-## Phase 1 — Foundation & Database (Weeks 1-2)
+Original roadmap: Phase 1 recorded complete; Phase 2 partially implemented through contest/series management.
 
-Goal: application skeleton, router, database, authentication, and base UI.
+Revised roadmap: **M0, partially complete**. The small fixes below are implemented; broader foundation changes remain pending. There are still no problem, test or submission models/routes.
 
-`[x]` **Session 1 — Project skeleton**
-- Initialize Go module (`go mod init cotests`).
-- Install `chi` router (`github.com/go-chi/chi/v5`).
-- Single HTTP server listening on `:3000`.
-- Serve CSS, JS, and HTMX via `//go:embed` so everything lives in one binary.
+- [x] Go/chi, embedded HTMX/templates/CSS, GORM and SQLite with a selectable PostgreSQL driver.
+- [x] Registration/login/logout, bcrypt, hashed sessions, global admin/user guards and current POST CSRF checks.
+- [x] Contest/series CRUD and active published-contest browsing.
+- [x] SQLite foreign keys survive connection replacement; regression coverage includes existing DSN options.
+- [x] HTMX contest creation replaces the list, removing its stale empty state.
+- [x] Password form/error text follows the existing byte-length rule; associated labels and autocomplete added.
+- [x] Minimal judge interface and Noop implementation returning ErrUnavailable. No submission endpoint uses it yet.
+- [ ] Operator bootstrap, throttling, versioned migrations, scoped memberships and broader resource policies.
+- [ ] Problems, tests, submission persistence/history and the rest of the web MVP.
 
-`[x]` **Session 2 — Database setup**
-- Connect to SQLite using `github.com/glebarez/sqlite` (pure Go, no CGO).
-- Optionally switch to PostgreSQL via `DATABASE_URL` using `gorm.io/driver/postgres`.
-- Implement `db.Open(dsn)` auto-detection and GORM `AutoMigrate` plumbing.
+## Release sequence
 
-`[x]` **Session 3-4 — Users and sessions**
-- Create `User` and `Session` models.
-- Add password hashing with `golang.org/x/crypto/bcrypt`.
+| Milestone | Outcome | Completion gate |
+| --- | --- | --- |
+| M0 | Foundation fixes | Current data survives upgrades; controlled bootstrap, request protection and supported DB checks pass. |
+| M1 | Problem authoring | Publish statements/PDFs, samples and private tests with revisioned metadata; capture legacy import fixtures. |
+| M2 | Submission alpha, judge disabled | Save source once, show own history/code, display “Saved — not judged”; no fake results or queued work. |
+| M3 | **Web MVP** | Account/contest operations, permissions, clarifications, persistence, browser checks and restore rehearsal pass. |
+| M4 | Remaining web/content parity | Full administration, cloning, imports, aliases and baseline views; engine-dependent actions remain visibly unavailable. |
+| J | Professor-led judge design and later integration | Agree the contract, then separately implement and verify actual grading and dependent result workflows. |
+| M5 | Additional functionality | Prioritized extensions with regression checks. |
 
-`[x]` **Session 5-6 — Authentication & authorization**
+**Full ZawodyWeb replacement requires both M4 and J.** The web MVP with a disabled judge is not a live graded-contest release. J has no scheduled implementation date and is not a prerequisite for M1–M3.
 
-> Detailed plan: [AUTH.md](./AUTH.md)
+## M0 — Foundation
 
-- Backend registration, login, logout, CSRF validation, and session cleanup.
-- Issue HTTP-only, SameSite session cookies and store token hashes only.
-- Add `Role` field to `User` (`admin` / `user`) and promote the first user to `admin`.
-- Implement chi middleware: load identity, require login, and require roles.
+- [x] C01: fix SQLite connection integrity.
+- [ ] C02: introduce operator-controlled admin creation and preserve existing administrators.
+- [ ] C03: versioned migrations, data/public-URL configuration and PostgreSQL integration checks.
+- [ ] C04: central CSRF/origin protection, authentication limits and explicit publication/access policies.
+- [x] Fix the stale contest-list message and auth form byte-length mismatch.
+- [ ] Follow up on series reordering, private templates, request contexts, readiness, responsive layouts and backup instructions.
 
-`[x]` **Session 7 — Base UI**
-- Shared `layout.html` with header and navigation.
-- Role-aware navigation links and an admin dashboard placeholder.
-- Base `home.html`, `auth_form.html`, and HTMX-compatible access-denied fragments.
+The bootstrap/auth/migration changes are separate implementation tasks. They are not included in this branch's minor fixes.
 
-`[x]` **Phase 1 verification**
-- Shared test helpers provide isolated SQLite databases, users, sessions, HTTP forms, and CSRF cookies.
-- Automated checks: `go test ./...`, `go test -race ./...`, `go vet ./...`, and `go build`.
-- GitHub Actions runs `go mod download`, `go vet ./...`, and `go test -race ./...` for pull requests and pushes to `main`.
-- Manual check on a clean SQLite database: registration, first-user admin promotion, guest redirect from `/admin`, and admin dashboard access.
+## M1 — Problem authoring
 
----
+- [x] C05: provide only the provisional judge interface/Noop package.
+- [ ] C06: Problem, ProblemRevision, SeriesProblem, TestCase and language/checker metadata references.
+- [ ] C07: private artifacts, authoring/publication UI, Markdown/PDF, samples, hidden tests and bounded tests ZIP import.
+- [ ] Scoped organizer/participant access and validation of content metadata.
+- [ ] C08: record original XML/checker/language identifiers and representative import fixtures without executing any checker.
 
-## Phase 2 — Interface & Content Draft (Weeks 3-5)
+Limits, language selections and checker names are metadata at this stage. Validate their structure; do not claim runtime support or enforce grading semantics through a new engine.
 
-Goal: a usable admin and participant interface for contest content. This phase does
-not execute submissions or store test cases; the submit action shows an explicit
-"judging is not available yet" placeholder.
+## M2 — Saved submissions with an empty judge
 
-`[x]` **Session 8-9 — Contests and Series**
-- `Contest` model (title, description, start/end dates, visibility).
-- `Series` model (title, order) belonging to a contest.
-- Set up hierarchy and cascade deletes.
-- Add SQLite-backed model and migration tests for constraints, ordering, and cascade deletion.
-- Exit criterion: an admin can create a contest with ordered series through the data layer; non-admin access remains denied.
+- [ ] C09: transactional source persistence, ownership, schedule validation and idempotency.
+- [ ] C10: inject Noop at the submission service boundary; handle ErrUnavailable as unjudged.
+- [ ] C11: participant status/history/source views; verdict, score, runtime and memory remain absent.
+- [ ] C12: ranking and rejudge surfaces clearly state that judging is unavailable; no fabricated standings or result mutation.
 
-`[x]` **Session 10-11 — Admin HTMX CRUD for Contests & Series**
-- List views and create/edit/delete forms using HTMX fragments.
-- Admin-only routes protected by middleware.
+**Exit:** a source submission survives restart, a retried request creates no duplicate, another participant cannot read it, and the UI clearly distinguishes saved source from evaluated code. No background jobs, worker process, compiler, checker or executor is introduced.
 
-`[ ]` **Responsive interface polish**
-- Rework navigation, form grids, buttons, and cards for narrow screens without horizontal overflow.
-- Verify the public and admin flows at mobile, tablet, and desktop breakpoints.
+## M3 — Web MVP
 
-`[ ]` **Session 12-13 — Tasks**
-- `Task` model with metadata: RAM/CPU limits, allowed languages, points.
-- Belongs to a `Series`.
+- [ ] C13: profile/password/recovery/disable flows, scoped membership, series schedules, archives and clarifications.
+- [ ] C14: administration of saved submissions, submission/storage quotas and authoring operations.
+- [ ] C15: rehearse the [MVP release checklist](MVP.md#mvp-release-checklist), including a clean restore and disabled-judge behavior.
+- [ ] Verify core mobile/keyboard and ordinary/HTMX form flows; document setup and remaining blockers.
 
-`[ ]` **Session 14-15 — Task creation UI**
-- HTMX form for creating/editing tasks.
-- PDF statement upload stored as a BLOB column in SQLite.
-- Dedicated route to serve the PDF back to the browser.
+**Exit:** the platform supports authoring, participation and submission collection without direct database editing. It does not grade or award scores.
 
-`[ ]` **Session 16-17 — Participant interface and judge placeholder**
-- Public contest and series lists respecting visibility and active dates.
-- Task page with statement, limits, points, and available languages.
-- Submit form with a language selector and source-code textarea.
-- A CSRF-protected HTMX endpoint returns a clear placeholder: the solution is not saved or judged until Phase 3.
-- Exit criterion: both roles can complete their content-browsing workflows, while no user can mistake the placeholder for a verdict.
+## M4 — Remaining web/content parity
 
----
+- [ ] Full user administration, aliases, necessary permissions and account/history inventory.
+- [ ] Problem cloning and bounded native/legacy problem/series/contest/test imports with preview.
+- [ ] Legacy test/configuration metadata, language/compiler/checker catalogues and quiz answer collection.
+- [ ] Remaining ranking/filter/freeze and rejudge administration surfaces; keep execution and scored output unavailable until J.
+- [ ] Optional series IP restrictions with explicit trusted-proxy policy.
+- [ ] Historical data migration with provenance; imported historical results, if supported, must not be presented as new judge results.
 
-## Phase 3 — MainJudge Engine (Weeks 6-9)
+Rows in FEATURE_PARITY.md that require actual grading remain incomplete until J. Building a view or importing a checker name does not complete those rows.
 
-Goal: compile, execute, and judge user submissions safely.
+## J — Professor-led work, deferred
 
-`[ ]` **Session 18-19 — Tests, submissions, and worker pool**
-- `Test` model: input, expected output, points, per-test time/memory limits.
-- Admin-only UI for adding and editing test cases.
-- `Submission` model: code, language, status, runtime, memory, score.
-- Goroutine + channel worker pool for processing the submission queue.
+Use [JUDGE.md](JUDGE.md) as the discussion boundary. Agree execution isolation, language support, request/result delivery, retries, verdicts, metrics, checker compatibility, scoring and rejudging semantics together.
 
-`[ ]` **Session 20-22 — Sandbox**
-- Compile and run submissions with `os/exec`.
-- Use `context.WithTimeout` for execution timeout.
-- Support compilers/interpreters like `g++` and `python3`.
+Only after that design is agreed, create a separate implementation backlog and verify required legacy behavior. Previous Linux worker, Isolate, job lease and C++/Python execution proposals are not selected requirements for this branch or web MVP.
 
-`[ ]` **Session 23-24 — Metrics**
-- Measure execution time (wall clock).
-- Measure peak memory via `rusage` / `MaxRSS`.
+## Immediate implementation order after review
 
-`[ ]` **Session 25-27 — Checkers**
-- Define `CheckerInterface`.
-- Implement `ExactDiff` (byte-exact output comparison).
-- Implement `NormalDiff` (ignore leading/trailing whitespace).
+1. C02–C04: remaining foundation tasks.
+2. C06–C08: author/publish/read problems and record legacy formats.
+3. C09–C12: save submissions with explicit unjudged status and disabled result actions.
+4. C13–C15: finish and verify the web MVP.
+5. Continue M4 while professor-led design proceeds separately when scheduled.
 
-`[ ]` **Session 28-29 — End-to-end pipeline**
-- Compile → run on each test input → pass output to checker → write verdict to DB.
-- Verdicts: Pending, Running, Accepted, Wrong Answer, Time Limit Exceeded, Memory Limit Exceeded, Runtime Error, Compilation Error.
-
----
-
-## Phase 4 — Submission Experience (Weeks 10-12)
-
-Goal: replace the Phase 2 placeholder with a complete participant submission experience.
-
-`[ ]` **Session 30-31 — Connect submissions to the judge**
-- Replace the placeholder endpoint with submission persistence and queueing.
-- Preserve the Phase 2 task page and submit form.
-
-`[ ]` **Session 32-33 — Submission history**
-- Show a participant's previous submissions, verdicts, score, time, and memory.
-
-`[ ]` **Session 36-38 — Live status updates**
-- HTMX polling (`hx-trigger="every 2s"`) or Server-Sent Events (SSE) in Go.
-- Show status transitions: Pending → Running → Accepted / Wrong Answer / etc.
-
----
-
-## Phase 5 — Scoring & Quizzes (Weeks 13-14)
-
-Goal: aggregate scores and support non-code quiz tasks.
-
-`[ ]` **Session 39-40 — Score aggregation**
-- SQL queries that compute the maximum score per task per user.
-- Cache or compute total contest/series scores.
-
-`[ ]` **Session 41-42 — Leaderboards**
-- Global rating page.
-- Per-contest and per-series rating pages.
-
-`[ ]` **Session 43-44 — Quiz task type**
-- New task kind that accepts a text answer instead of source code.
-- Special `QuizDiff` checker supporting exact match or regex match.
-- Adjusted submission UI for quiz answers.
-
----
-
-## Phase 6 — Admin Bulk Operations (Weeks 15+)
-
-Goal: reduce repetitive admin work via import, clone, and re-judge.
-
-`[ ]` **Session 45-47 — ZIP import**
-- Parse ZIP archives using `archive/zip`.
-- Infer folder structure (`tests/1.in`, `tests/1.out`, statements, etc.).
-- Auto-create tasks, tests, and file attachments.
-
-`[ ]` **Session 48 — Task cloning**
-- Deep copy a task record including its tests and statement blob.
-
-`[ ]` **Session 49 — Re-judge**
-- Admin button to reset submission statuses and re-enqueue them in the worker pool.
-
----
-
-## Notes
-
-- All static assets are embedded; the final deliverable is a single `cotests` binary.
-- SQLite is the default database for simplicity; PostgreSQL is available via `DATABASE_URL`.
-- Design system: *The Digital Atelier* — tokens live in `static/css/style.css`.
+C01 and C05 are implemented at their deliberately limited scope. C01–C15 identifiers are retained, but C05 and C10–C12 have been revised from the earlier engine-first plan to match the user's decision. No calendar dates are promised.

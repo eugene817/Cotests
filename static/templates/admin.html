@@ -40,16 +40,18 @@
   <section>
     <h2 style="margin-bottom:var(--spacing-4)">All contests</h2>
     <div id="contest-list" style="display:grid; gap:var(--spacing-4)">
-      {{if .Contests}}
-        {{range .Contests}}
-          {{template "contest_card" .}}
-        {{end}}
-      {{else}}
-        <div class="card surface-container-low empty-contests"><p>No contests yet. Create the first one above.</p></div>
-      {{end}}
+      {{template "contest_list" .Contests}}
     </div>
   </section>
 </main>
+{{end}}
+
+{{define "contest_list"}}
+{{range .}}
+  {{template "contest_card" .}}
+{{else}}
+  <div class="card surface-container-low empty-contests"><p>No contests yet. Create the first one above.</p></div>
+{{end}}
 {{end}}
 
 {{define "contest_card"}}

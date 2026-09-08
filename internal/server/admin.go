@@ -72,9 +72,15 @@ func (h *Handler) CreateContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if isHTMX(r) {
+		contests, err := db.ListContests(h.DB)
+		if err != nil {
+			log.Printf("list contests after create: %v", err)
+			hxRedirect(w, r, "/admin/contests")
+			return
+		}
 		w.Header().Set("HX-Retarget", "#contest-list")
-		w.Header().Set("HX-Reswap", "afterbegin")
-		h.render(w, "contest_card", contest)
+		w.Header().Set("HX-Reswap", "innerHTML")
+		h.render(w, "contest_list", contests)
 		return
 	}
 	hxRedirect(w, r, fmt.Sprintf("/admin/contests/%d", contest.ID))

@@ -25,6 +25,7 @@ func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 {{define "admin"}}admin{{end}}
 {{define "contest_detail"}}contest detail{{end}}
 {{define "contest_card"}}{{.Title}}{{end}}
+{{define "contest_list"}}{{range .}}{{template "contest_card" .}}{{else}}No contests yet{{end}}{{end}}
 {{define "admin_error"}}{{.Error}}{{end}}
 {{define "public_contests"}}public contests{{end}}
 {{define "public_contest"}}public contest{{end}}`))

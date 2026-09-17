@@ -2,7 +2,15 @@
 
 [![CI](https://github.com/eugene817/Cotests/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/eugene817/Cotests/actions/workflows/ci.yml)
 
-Single-binary programming contest and quiz platform built with Go, chi, HTMX, GORM, and SQLite (with optional PostgreSQL).
+Cotests is a remake of ZawodyWeb with additional functionality, built with Go,
+chi, HTMX, GORM, and SQLite (with optional PostgreSQL). The web application is
+packaged as a single binary.
+
+Currently implemented: accounts, sessions, contest/series administration, and
+public browsing of active published contests. The judge has only an interface
+and a no-op implementation that returns “unavailable”; it executes nothing and
+produces no results. The engine will be designed with the professor.
+Problem authoring, submission persistence, rankings, and quizzes are planned.
 
 ## Quick start
 
@@ -46,10 +54,22 @@ go build -o cotests .
 - All state-changing forms require a CSRF token.
 - The first registered account is an `admin`; subsequent accounts receive the `user` role.
 
+SQLite connection handling has been fixed. Operator-controlled administrator
+bootstrap and authentication throttling remain pending; see [CODE_REVIEW.md](CODE_REVIEW.md).
+
 ## Design
 
 Visual design follows *The Digital Atelier* system. Tokens are defined in `static/css/style.css`.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full development plan.
+Current phase: M0, partially complete. M2 will save submissions with the judge
+disabled; M3 is the web MVP for authoring and submission collection. Full
+replacement needs M4 web/content parity plus the deferred professor-led judge
+work (J). See [MVP.md](MVP.md), [JUDGE.md](JUDGE.md), and
+[FEATURE_PARITY.md](FEATURE_PARITY.md) for the scope and acceptance criteria.
+
+See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria,
+[ARCHITECTURE.md](ARCHITECTURE.md) for the proposed stack and domain design,
+[AUTH.md](AUTH.md) for account policies, and [CODE_REVIEW.md](CODE_REVIEW.md)
+for verified findings and differences from the original ZawodyWeb.

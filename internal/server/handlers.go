@@ -267,7 +267,7 @@ func validateCredentials(email, password string) error {
 		return fmt.Errorf("enter a valid email address")
 	}
 	if len(password) < 8 || len(password) > 72 {
-		return fmt.Errorf("password must be between 8 and 72 characters")
+		return fmt.Errorf("password must be between 8 and 72 UTF-8 bytes")
 	}
 	return nil
 }

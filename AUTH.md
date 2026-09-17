@@ -10,7 +10,8 @@ Reviewed 2026-09-08. This document distinguishes implemented behavior from the p
 - Random 256-bit session identifiers; SHA-256 token hashes stored in the database.
 - Seven-day sessions with HttpOnly, SameSite=Lax cookies and optional Secure via SECURE_COOKIES=true.
 - Expired-session cleanup during session creation and when an expired session is presented.
-- The first registered user receives admin; subsequent registrations receive user.
+- Public registration always creates a `user` account.
+- A local `cotests admin create --email … [--name …]` command creates administrators after hidden password confirmation.
 - Admin-only contest/series management, role-aware navigation, and series-parent checks.
 - Current POST handlers validate the csrf_token cookie against a submitted form/header token.
 - Ordinary unauthenticated protected-page requests redirect to login; HTMX requests receive a 401 fragment. Role denial returns 403.
@@ -19,7 +20,7 @@ Profile editing, password change/recovery, account disabling, contest membership
 
 ## M0 — Changes required before public deployment
 
-**Bootstrap.** Replace first-public-registration promotion with an operator-only command, proposed as `cotests admin create`, or one-use private setup credential. The command does not exist yet. Public registration always creates an ordinary account. Preserve existing administrators and audit later privilege changes.
+**Bootstrap.** Implemented: `cotests admin create --email … [--name …]` opens and migrates the configured database, then requests and confirms a hidden terminal password before creating an administrator. Public registration always creates an ordinary account; existing administrators are preserved. The command rejects duplicate emails and non-interactive password input.
 
 **Abuse protection.** Add bounded per-account/per-IP attempt budgets and a global cap on concurrent password hashing. Configure trusted proxies before consuming forwarded addresses. Keep generic login failures and avoid indefinite account lockout. Cover enumeration/timing behavior without claiming exact timing equality.
 
@@ -65,7 +66,7 @@ Institutional authentication does not automatically grant platform administrator
 
 ## Verification gates
 
-- Public registration never bootstraps an administrator.
+- Public registration never bootstraps an administrator; the local command creates one after password confirmation.
 - Guests, participants, organizers of another contest and disabled accounts are denied forbidden pages, fragments, source and artifacts.
 - Missing/invalid CSRF and cross-origin browser mutations fail; valid normal/HTMX forms work.
 - Login/registration throttles bound work without permanently locking out a victim.

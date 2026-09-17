@@ -15,7 +15,7 @@ Updated: 2026-09-08. Cotests is a remake of ZawodyWeb with additional functional
 
 Original roadmap: Phase 1 recorded complete; Phase 2 partially implemented through contest/series management.
 
-Revised roadmap: **M0, partially complete**. The small fixes below are implemented; broader foundation changes remain pending. There are still no problem, test or submission models/routes.
+Revised roadmap: **M0, partially complete**. The small fixes and administrator bootstrap below are implemented; broader foundation changes remain pending. There are still no problem, test or submission models/routes.
 
 - [x] Go/chi, embedded HTMX/templates/CSS, GORM and SQLite with a selectable PostgreSQL driver.
 - [x] Registration/login/logout, bcrypt, hashed sessions, global admin/user guards and current POST CSRF checks.
@@ -23,6 +23,7 @@ Revised roadmap: **M0, partially complete**. The small fixes below are implement
 - [x] SQLite foreign keys survive connection replacement; regression coverage includes existing DSN options.
 - [x] HTMX contest creation replaces the list, removing its stale empty state.
 - [x] Password form/error text follows the existing byte-length rule; associated labels and autocomplete added.
+- [x] Public registration always creates a user; a local terminal command creates administrators after password confirmation.
 - [x] Minimal judge interface and Noop implementation returning ErrUnavailable. No submission endpoint uses it yet.
 - [ ] Operator bootstrap, throttling, versioned migrations, scoped memberships and broader resource policies.
 - [ ] Problems, tests, submission persistence/history and the rest of the web MVP.
@@ -44,7 +45,7 @@ Revised roadmap: **M0, partially complete**. The small fixes below are implement
 ## M0 — Foundation
 
 - [x] C01: fix SQLite connection integrity.
-- [ ] C02: introduce operator-controlled admin creation and preserve existing administrators.
+- [x] C02: introduce operator-controlled admin creation and preserve existing administrators.
 - [ ] C03: versioned migrations, data/public-URL configuration and PostgreSQL integration checks.
 - [ ] C04: central CSRF/origin protection, authentication limits and explicit publication/access policies.
 - [x] Fix the stale contest-list message and auth form byte-length mismatch.
@@ -99,7 +100,7 @@ Only after that design is agreed, create a separate implementation backlog and v
 
 ## Immediate implementation order after review
 
-1. C02–C04: remaining foundation tasks.
+1. C03–C04: remaining foundation tasks.
 2. C06–C08: author/publish/read problems and record legacy formats.
 3. C09–C12: save submissions with explicit unjudged status and disabled result actions.
 4. C13–C15: finish and verify the web MVP.

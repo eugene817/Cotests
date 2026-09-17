@@ -57,7 +57,7 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestRegisterSetsSecureSessionAndAdminRole(t *testing.T) {
+func TestRegisterSetsSecureSessionAndUserRole(t *testing.T) {
 	router, database := newTestRouter(t)
 	csrf := getCSRFCookie(t, router, "/register")
 	form := url.Values{"email": {"admin@example.com"}, "password": {"password1"}, "name": {"Admin"}, "csrf_token": {csrf.Value}}
@@ -72,8 +72,8 @@ func TestRegisterSetsSecureSessionAndAdminRole(t *testing.T) {
 	if err := database.First(&user).Error; err != nil {
 		t.Fatalf("load user: %v", err)
 	}
-	if user.Role != db.RoleAdmin {
-		t.Fatalf("role = %q, want %q", user.Role, db.RoleAdmin)
+	if user.Role != db.RoleUser {
+		t.Fatalf("role = %q, want %q", user.Role, db.RoleUser)
 	}
 	cookie := sessionCookie(t, response.Result())
 	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
@@ -111,7 +111,7 @@ func TestRegisterRejectsDuplicateEmail(t *testing.T) {
 
 func TestAdminAuthorization(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	member := testutil.CreateUser(t, database, "member@example.com")
 	adminToken := testutil.CreateSession(t, database, admin.ID)
 	memberToken := testutil.CreateSession(t, database, member.ID)
@@ -141,7 +141,7 @@ func TestAdminAuthorization(t *testing.T) {
 
 func TestAdminRedirectsToCanonicalContestURL(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	token := testutil.CreateSession(t, database, admin.ID)
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
 	req.AddCookie(&http.Cookie{Name: "session_token", Value: token})
@@ -156,7 +156,7 @@ func TestAdminRedirectsToCanonicalContestURL(t *testing.T) {
 
 func TestAdminSeriesRouteRequiresMatchingContest(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	token := testutil.CreateSession(t, database, admin.ID)
 	first := &db.Contest{Title: "First"}
 	second := &db.Contest{Title: "Second"}
@@ -213,7 +213,7 @@ func TestPublicContestRoutesHideDrafts(t *testing.T) {
 
 func TestAdminCanManageContestAndSeries(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	token := testutil.CreateSession(t, database, admin.ID)
 	session := &http.Cookie{Name: "session_token", Value: token}
 	csrf := getCSRFCookie(t, router, "/admin/contests", session)
@@ -275,7 +275,7 @@ func TestAdminCanManageContestAndSeries(t *testing.T) {
 
 func TestAdminContestRoutesRequireCSRFAndAdminRole(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	member := testutil.CreateUser(t, database, "member@example.com")
 	adminToken := testutil.CreateSession(t, database, admin.ID)
 	memberToken := testutil.CreateSession(t, database, member.ID)
@@ -296,7 +296,7 @@ func TestAdminContestRoutesRequireCSRFAndAdminRole(t *testing.T) {
 
 func TestAdminHTMXCreateAndDeleteSeriesReturnFragments(t *testing.T) {
 	router, database := newTestRouter(t)
-	admin := testutil.CreateUser(t, database, "admin@example.com")
+	admin := testutil.CreateAdmin(t, database, "admin@example.com")
 	token := testutil.CreateSession(t, database, admin.ID)
 	session := &http.Cookie{Name: "session_token", Value: token}
 	csrf := getCSRFCookie(t, router, "/admin/contests", session)

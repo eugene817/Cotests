@@ -21,6 +21,14 @@ go build -o cotests .
 
 The server starts on `http://localhost:3000`.
 
+Create an administrator locally before exposing a fresh installation. The
+password is requested without echoing it and is never passed as a command-line
+argument.
+
+```bash
+./cotests admin create --email admin@example.com --name "Administrator"
+```
+
 Set `DATABASE_URL` to a PostgreSQL DSN to use PostgreSQL instead of the local
 `cotests.db` file. Set `SECURE_COOKIES=true` when serving the application over
 HTTPS in production.
@@ -52,10 +60,10 @@ go build -o cotests .
 - Session identifiers are random 256-bit values. Only their SHA-256 hashes are stored in the database.
 - Session cookies are HTTP-only, `SameSite=Lax`, and can be marked `Secure` with `SECURE_COOKIES=true`.
 - All state-changing forms require a CSRF token.
-- The first registered account is an `admin`; subsequent accounts receive the `user` role.
+- Public registration always creates a `user` account. Administrators are created locally with `cotests admin create`.
 
-SQLite connection handling has been fixed. Operator-controlled administrator
-bootstrap and authentication throttling remain pending; see [CODE_REVIEW.md](CODE_REVIEW.md).
+SQLite connection handling and operator-controlled administrator bootstrap are
+implemented. Authentication throttling remains pending; see [CODE_REVIEW.md](CODE_REVIEW.md).
 
 ## Design
 

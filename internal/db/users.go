@@ -2,28 +2,28 @@ package db
 
 import (
 	"cotests/internal/auth"
-	"database/sql"
 	"errors"
 
 	"gorm.io/gorm"
 )
 
 func CreateUser(database *gorm.DB, email, password, name string) (*User, error) {
+	return createUser(database, email, password, name, RoleUser)
+}
+
+// CreateAdmin creates an administrator through a local operator command.
+// Public registration must use CreateUser.
+func CreateAdmin(database *gorm.DB, email, password, name string) (*User, error) {
+	return createUser(database, email, password, name, RoleAdmin)
+}
+
+func createUser(database *gorm.DB, email, password, name, role string) (*User, error) {
 	password_hash, err := auth.HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
-	user := &User{Email: email, PasswordHash: password_hash, Name: name, Role: RoleUser}
-	if err := database.Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(&User{}).Count(&count).Error; err != nil {
-			return err
-		}
-		if count == 0 {
-			user.Role = RoleAdmin
-		}
-		return tx.Create(user).Error
-	}, &sql.TxOptions{Isolation: sql.LevelSerializable}); err != nil {
+	user := &User{Email: email, PasswordHash: password_hash, Name: name, Role: role}
+	if err := database.Create(user).Error; err != nil {
 		return nil, err
 	}
 

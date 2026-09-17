@@ -37,6 +37,28 @@ func TestCreateUserRejectsDuplicateEmail(t *testing.T) {
 	}
 }
 
+func TestCreateUserAlwaysAssignsUserRole(t *testing.T) {
+	database := testutil.NewDatabase(t)
+	first, err := db.CreateUser(database, "first@example.com", "password1", "First")
+	if err != nil {
+		t.Fatalf("create first user: %v", err)
+	}
+	if first.Role != db.RoleUser {
+		t.Fatalf("first role = %q, want %q", first.Role, db.RoleUser)
+	}
+}
+
+func TestCreateAdminAssignsAdminRole(t *testing.T) {
+	database := testutil.NewDatabase(t)
+	admin, err := db.CreateAdmin(database, "admin@example.com", "password1", "Admin")
+	if err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	if admin.Role != db.RoleAdmin {
+		t.Fatalf("admin role = %q, want %q", admin.Role, db.RoleAdmin)
+	}
+}
+
 func TestGetUserByEmailReturnsNotFound(t *testing.T) {
 	_, err := db.GetUserByEmail(testutil.NewDatabase(t), "missing@example.com")
 	if !errors.Is(err, gorm.ErrRecordNotFound) {

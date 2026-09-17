@@ -41,6 +41,16 @@ func CreateUser(t *testing.T, database *gorm.DB, email string) *db.User {
 	return user
 }
 
+func CreateAdmin(t *testing.T, database *gorm.DB, email string) *db.User {
+	t.Helper()
+
+	user, err := db.CreateAdmin(database, email, "password1", "Test Administrator")
+	if err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	return user
+}
+
 func CreateSession(t *testing.T, database *gorm.DB, userID uint) string {
 	t.Helper()
 

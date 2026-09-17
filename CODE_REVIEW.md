@@ -26,6 +26,8 @@ The temporary diagnostic probe was removed after the original verification; the 
 
 ### P1 — Public registration can claim the first administrator account
 
+**Fixed on feature/admin-bootstrap.** Public registration now always creates a user. `cotests admin create --email … [--name …]` is a local operator command that creates an administrator only after a hidden password confirmation; duplicate emails are rejected and existing administrators are untouched.
+
 Location: [internal/db/users.go](internal/db/users.go), lines 17–25; [internal/server/router.go](internal/server/router.go), lines 35–37.
 
 On an empty installation, any visitor completing registration first receives full administrator access. The server binds to `:3000`, so a fresh deployment exposed before its owner registers can be taken over. This is current documented behavior, but it is an unsafe production bootstrap policy.

@@ -7,10 +7,10 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/mail"
 	"strings"
 	"time"
 
+	"cotests/internal/auth"
 	"cotests/internal/db"
 
 	"gorm.io/gorm"
@@ -262,14 +262,10 @@ func readAuthForm(w http.ResponseWriter, r *http.Request) (email, password, name
 }
 
 func validateCredentials(email, password string) error {
-	parsed, err := mail.ParseAddress(email)
-	if err != nil || parsed.Address != email {
-		return fmt.Errorf("enter a valid email address")
+	if _, err := auth.NormalizeEmail(email); err != nil {
+		return err
 	}
-	if len(password) < 8 || len(password) > 72 {
-		return fmt.Errorf("password must be between 8 and 72 UTF-8 bytes")
-	}
-	return nil
+	return auth.ValidatePassword(password)
 }
 
 func hxRedirect(w http.ResponseWriter, r *http.Request, url string) {

@@ -32,24 +32,6 @@ func TestCreateSessionStoresOnlyTokenHash(t *testing.T) {
 	}
 }
 
-func TestCreateUserAssignsFirstAdmin(t *testing.T) {
-	database := testutil.NewDatabase(t)
-	first, err := db.CreateUser(database, "first@example.com", "password1", "First")
-	if err != nil {
-		t.Fatalf("create first user: %v", err)
-	}
-	second, err := db.CreateUser(database, "second@example.com", "password1", "Second")
-	if err != nil {
-		t.Fatalf("create second user: %v", err)
-	}
-	if first.Role != db.RoleAdmin {
-		t.Fatalf("first role = %q, want %q", first.Role, db.RoleAdmin)
-	}
-	if second.Role != db.RoleUser {
-		t.Fatalf("second role = %q, want %q", second.Role, db.RoleUser)
-	}
-}
-
 func TestDeleteExpiredSessions(t *testing.T) {
 	database := testutil.NewDatabase(t)
 	user, err := db.CreateUser(database, "admin@example.com", "password1", "Admin")

@@ -19,7 +19,7 @@ func TestSQLiteConstraintsSurviveConnectionReplacement(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { pool.Close() })
-			if err := db.AutoMigrate(database); err != nil {
+			if err := db.Migrate(database); err != nil {
 				t.Fatal(err)
 			}
 			contest := createContest(t, database, "Contest")

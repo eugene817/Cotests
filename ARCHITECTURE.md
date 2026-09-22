@@ -23,7 +23,7 @@ The first installation is assumed to serve one institution. Enrollment, account 
 | Web | Keep Go, chi, html/template and go:embed | No framework rewrite planned. |
 | Browser | Keep HTMX and small JavaScript modules | No result polling while the judge is unavailable. |
 | Style | Keep The Digital Atelier and CSS tokens | Extract repeated layouts and verify accessibility/mobile flows incrementally. |
-| Data layer | Keep GORM, SQLite and optional PostgreSQL | Add versioned migrations and real PostgreSQL integration checks. |
+| Data layer | Keep GORM, SQLite, optional PostgreSQL and versioned migrations | Run the opt-in PostgreSQL integration check against each supported deployment. |
 | SQLite | Enable foreign keys through the DSN on every connection; keep the existing single-connection pool | Tune WAL/concurrency only against deployment needs. |
 | Files | Plan private filesystem artifacts plus DB metadata/hashes | Object storage or a bounded BLOB backend can be considered separately. |
 | Auth | Keep opaque cookie sessions and bcrypt | Operator bootstrap, throttling, recovery and scoped membership are foundation work. |
@@ -32,7 +32,7 @@ The first installation is assumed to serve one institution. Enrollment, account 
 
 The web application remains a single Go binary with embedded UI. No compiler, container runtime, separate worker or judge dependency is required by the current implementation or web MVP.
 
-GORM can remain the query layer while migrations become explicit and versioned; its documentation describes AutoMigrate's limits and the transition to versioned migrations. [GORM migrations](https://gorm.io/docs/migration.html)
+GORM remains the query layer. Schema changes are explicit, ordered migrations recorded in `schema_migrations`; add a new immutable migration for every future schema change.
 
 SQLite foreign-key setup is now applied per connection using the pinned driver's DSN support. Existing caller options are retained, with the required FK pragma appended last. [Driver configuration](https://github.com/glebarez/sqlite#foreign-key-constraint-activation)
 

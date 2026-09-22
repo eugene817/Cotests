@@ -29,13 +29,20 @@ argument.
 ./cotests admin create --email admin@example.com --name "Administrator"
 ```
 
-Set `DATABASE_URL` to a PostgreSQL DSN to use PostgreSQL instead of the local
-`cotests.db` file. Set `SECURE_COOKIES=true` when serving the application over
-HTTPS in production.
+Runtime state is explicit: `DATA_DIR` defaults to the current directory and
+contains `cotests.db` when `DATABASE_URL` is absent. `LISTEN_ADDR` defaults to
+`:3000`. `PUBLIC_URL`, when set, must be an `http` or `https` origin and makes
+cookies secure automatically for an HTTPS origin. Set `DATABASE_URL` to a
+PostgreSQL DSN to use PostgreSQL instead of local SQLite.
 
 ```bash
 DATABASE_URL="postgres://user:pass@localhost:5432/cotests" SECURE_COOKIES=true ./cotests
 ```
+
+Schema upgrades run on startup and are recorded in `schema_migrations`. Before
+upgrading a production copy, back it up and run the binary against a copy first.
+The application refuses an upgrade that would add the session foreign key while
+orphaned sessions exist, rather than deleting them.
 
 ## Verification
 
@@ -45,12 +52,20 @@ go vet ./...
 go build -o cotests .
 ```
 
+To run the opt-in PostgreSQL integration test, provide a disposable PostgreSQL
+database URL with permission to create schemas. The test creates and drops a
+random `cotests_test_*` schema only.
+
+```bash
+COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go test ./internal/db -run TestPostgresMigrations
+```
+
 ## Stack
 
 - **Go** 1.25+ — backend and single-binary packaging
 - **chi** — HTTP router
 - **HTMX** — frontend interactivity
-- **GORM** — ORM and migrations
+- **GORM** — ORM and query layer
 - **SQLite** (`github.com/glebarez/sqlite`) — default pure-Go database
 - **PostgreSQL** (`gorm.io/driver/postgres`) — optional via `DATABASE_URL`
 - **bcrypt** — password hashing

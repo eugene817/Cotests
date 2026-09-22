@@ -15,7 +15,7 @@ func NewDatabase(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
-	if err := db.AutoMigrate(database); err != nil {
+	if err := db.Migrate(database); err != nil {
 		t.Fatalf("migrate database: %v", err)
 	}
 	sqlDB, err := database.DB()

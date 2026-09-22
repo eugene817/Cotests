@@ -3,8 +3,6 @@ package db
 import (
 	"cotests/internal/auth"
 	"time"
-
-	"gorm.io/gorm"
 )
 
 type User struct {
@@ -18,11 +16,12 @@ type User struct {
 }
 
 type Session struct {
-	ID        uint   `gorm:"primaryKey"`
-	UserID    uint   `gorm:"index;not null"`
-	TokenHash string `gorm:"uniqueIndex"`
-	ExpiresAt time.Time
+	ID        uint      `gorm:"primaryKey"`
+	UserID    uint      `gorm:"index;not null"`
+	TokenHash string    `gorm:"uniqueIndex;not null"`
+	ExpiresAt time.Time `gorm:"index;not null"`
 	CreatedAt time.Time
+	User      User `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }
 
 type Contest struct {
@@ -53,20 +52,6 @@ const (
 	ContestDraft     = "draft"
 	ContestPublished = "published"
 )
-
-func AutoMigrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&User{}, &Session{}, &Contest{}, &Series{}); err != nil {
-		return err
-	}
-	if db.Migrator().HasColumn(&Session{}, "token") {
-		// Existing tokens must not remain in the database after the hash-only migration.
-		if err := db.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&Session{}).Error; err != nil {
-			return err
-		}
-		return db.Migrator().DropColumn(&Session{}, "token")
-	}
-	return nil
-}
 
 func (u *User) SetPassword(p string) error {
 	password_hash, err := auth.HashPassword(p)

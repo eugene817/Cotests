@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"cotests/internal/auth"
+	"cotests/internal/config"
 	"cotests/internal/db"
 	"cotests/internal/server"
 
@@ -28,7 +29,14 @@ import (
 var staticFS embed.FS
 
 func main() {
-	dsn := databaseDSN()
+	runtime, err := config.Load(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := config.EnsureDataDir(runtime.DataDir); err != nil {
+		log.Fatal(err)
+	}
+	dsn := runtime.DatabaseDSN
 	if len(os.Args) > 1 {
 		if err := runCommand(os.Args[1:], dsn, terminalPasswordPrompt(os.Stdin, os.Stdout), os.Stdout); err != nil {
 			log.Fatal(err)
@@ -54,9 +62,9 @@ func main() {
 	}
 
 	r := server.NewRouter(database, http.FileServer(http.FS(sub)), tpl, server.Config{
-		SecureCookies: os.Getenv("SECURE_COOKIES") == "true",
+		SecureCookies: runtime.SecureCookies,
 	})
-	httpServer := &http.Server{Addr: ":3000", Handler: r, ReadHeaderTimeout: 5 * time.Second}
+	httpServer := &http.Server{Addr: runtime.ListenAddress, Handler: r, ReadHeaderTimeout: 5 * time.Second}
 
 	go func() {
 		quit := make(chan os.Signal, 1)
@@ -70,20 +78,17 @@ func main() {
 		}
 	}()
 
-	log.Println("listening on :3000")
+	if runtime.PublicURL != nil {
+		log.Printf("listening on %s (public URL %s)", runtime.ListenAddress, runtime.PublicURL)
+	} else {
+		log.Printf("listening on %s", runtime.ListenAddress)
+	}
 	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server: %v", err)
 	}
 }
 
 type passwordPrompt func(label string) (string, error)
-
-func databaseDSN() string {
-	if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-		return dsn
-	}
-	return "cotests.db"
-}
 
 func openDatabase(dsn string) (*gorm.DB, func(), error) {
 	database, err := db.Open(dsn)
@@ -100,7 +105,7 @@ func openDatabase(dsn string) (*gorm.DB, func(), error) {
 			log.Printf("close database: %v", err)
 		}
 	}
-	if err := db.AutoMigrate(database); err != nil {
+	if err := db.Migrate(database); err != nil {
 		closeDatabase()
 		return nil, nil, fmt.Errorf("migrate: %w", err)
 	}

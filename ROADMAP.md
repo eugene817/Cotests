@@ -46,7 +46,7 @@ Revised roadmap: **M0, partially complete**. The small fixes and administrator b
 
 - [x] C01: fix SQLite connection integrity.
 - [x] C02: introduce operator-controlled admin creation and preserve existing administrators.
-- [ ] C03: versioned migrations, data/public-URL configuration and PostgreSQL integration checks.
+- [ ] C03: versioned migrations and explicit data/public-URL configuration are implemented; run the opt-in PostgreSQL integration check against the intended deployment before marking complete.
 - [ ] C04: central CSRF/origin protection, authentication limits and explicit publication/access policies.
 - [x] Fix the stale contest-list message and auth form byte-length mismatch.
 - [ ] Follow up on series reordering, private templates, request contexts, readiness, responsive layouts and backup instructions.

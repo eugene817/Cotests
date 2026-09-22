@@ -52,7 +52,7 @@ IDs C01–C15 remain stable references; engine-related scopes have been explicit
 | --- | --- | --- | --- | --- |
 | C01 | Done | M0: SQLite integrity | Existing DB | Replacement connections retain FK enforcement and caller DSN settings; cascades and invalid-parent checks pass. |
 | C02 | Done | M0: operator bootstrap | Existing auth | Public registration cannot create an admin; the local password-confirmed command creates an administrator; existing roles survive upgrade. |
-| C03 | Pending | M0: migrations/configuration | C01 | Saved DB fixture upgrades; data directory/public URL are explicit; supported PostgreSQL checks pass. |
+| C03 | In review | M0: migrations/configuration | C01 | Versioned upgrades and explicit data directory/public URL are implemented; run the supported PostgreSQL check against the intended deployment. |
 | C04 | Pending | M0: request/access policies | C02, C03 | CSRF/origin/throttle checks and publication/schedule boundaries pass. |
 | C05 | Done | M1: interface plus Noop only | None | Interface compiles; Noop only returns ErrUnavailable. It has no executor, dependencies or side effects. Not integrated into a submission flow yet. |
 | C06 | Pending | M1: problem/revision/test model | C03, C04 | Editing a draft cannot mutate a published revision; grading configuration is stored as metadata. |

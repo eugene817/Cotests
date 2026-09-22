@@ -113,7 +113,7 @@ func TestCreateSessionRemovesExpiredSessions(t *testing.T) {
 	}
 }
 
-func TestAutoMigrateRemovesLegacyRawTokens(t *testing.T) {
+func TestMigrateRemovesLegacyRawTokens(t *testing.T) {
 	database, err := db.Open(":memory:")
 	if err != nil {
 		t.Fatalf("open database: %v", err)
@@ -121,11 +121,18 @@ func TestAutoMigrateRemovesLegacyRawTokens(t *testing.T) {
 	if err := database.AutoMigrate(&db.User{}, &legacySession{}); err != nil {
 		t.Fatalf("create legacy schema: %v", err)
 	}
-	if err := db.AutoMigrate(database); err != nil {
+	if err := db.Migrate(database); err != nil {
 		t.Fatalf("migrate legacy schema: %v", err)
 	}
 	if database.Migrator().HasColumn(&db.Session{}, "token") {
 		t.Fatal("legacy raw token column still exists")
+	}
+	var count int64
+	if err := database.Model(&db.Session{}).Count(&count).Error; err != nil {
+		t.Fatalf("count migrated sessions: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("migrated sessions = %d, want 0 after raw token invalidation", count)
 	}
 }
 

@@ -27,7 +27,69 @@ var migrations = []migration{
 	{version: 2, apply: removeLegacySessionTokens},
 	{version: 3, apply: addSessionIntegrity},
 	{version: 4, apply: requireSessionFields},
+	{version: 5, apply: createContentSchema},
+	{version: 6, apply: createAccessSchema},
+	{version: 7, apply: scopeAssignmentCodes},
 }
+
+// Older content schemas made display codes globally unique. Codes belong to a
+// series, so two rounds must both be able to use "A" without sharing content.
+func scopeAssignmentCodes(database *gorm.DB) error {
+	if database.Migrator().HasIndex(&SeriesProblem{}, "idx_series_problem_code") {
+		if err := database.Migrator().DropIndex(&SeriesProblem{}, "idx_series_problem_code"); err != nil {
+			return err
+		}
+	}
+	return database.Migrator().CreateIndex(&SeriesProblem{}, "idx_series_problem_code")
+}
+
+func createAccessSchema(database *gorm.DB) error {
+	for _, column := range []string{"StartAt", "EndAt", "ReleaseAt"} {
+		if !database.Migrator().HasColumn(&Series{}, column) {
+			if err := database.Migrator().AddColumn(&Series{}, column); err != nil {
+				return err
+			}
+		}
+	}
+	for _, model := range []any{&ContestMembership{}, &ImportPreview{}} {
+		if !database.Migrator().HasTable(model) {
+			if err := database.Migrator().CreateTable(model); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func createContentSchema(database *gorm.DB) error {
+	for _, model := range []any{&Artifact{}, &Problem{}, &ProblemRevision{}, &migrationSeriesProblem{}, &TestCase{}} {
+		if database.Migrator().HasTable(model) {
+			continue
+		}
+		if err := database.Migrator().CreateTable(model); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Freeze the original migration-5 assignment index. Migration 7 repairs its
+// scope even when upgrading an existing installation that already applied 5.
+type migrationSeriesProblem struct {
+	ID                  uint   `gorm:"primaryKey"`
+	SeriesID            uint   `gorm:"not null;uniqueIndex:idx_series_problem_position,priority:1"`
+	ProblemID           uint   `gorm:"not null;index"`
+	PublishedRevisionID uint   `gorm:"not null"`
+	Code                string `gorm:"not null;check:code <> '';uniqueIndex:idx_series_problem_code,priority:1"`
+	Position            int    `gorm:"not null;check:position >= 0;uniqueIndex:idx_series_problem_position,priority:2"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Series              Series          `gorm:"constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Problem             Problem         `gorm:"constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
+	PublishedRevision   ProblemRevision `gorm:"foreignKey:PublishedRevisionID;constraint:OnUpdate:CASCADE,OnDelete:RESTRICT;"`
+}
+
+func (migrationSeriesProblem) TableName() string { return "series_problems" }
 
 // Migrate applies each immutable schema migration once and records its version.
 // It also upgrades databases created before schema_migrations existed.

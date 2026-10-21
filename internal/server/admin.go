@@ -16,7 +16,7 @@ import (
 )
 
 func (h *Handler) AdminDashboard(w http.ResponseWriter, r *http.Request) {
-	contests, err := db.ListContests(h.DB)
+	contests, err := db.ListContests(h.DB.WithContext(r.Context()))
 	if err != nil {
 		log.Printf("list contests: %v", err)
 		http.Error(w, "Could not load contests.", http.StatusInternalServerError)
@@ -41,7 +41,7 @@ func (h *Handler) AdminContest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	series, err := db.ListSeries(h.DB, contest.ID)
+	series, err := db.ListSeries(h.DB.WithContext(r.Context()), contest.ID)
 	if err != nil {
 		log.Printf("list series: %v", err)
 		http.Error(w, "Could not load series.", http.StatusInternalServerError)
@@ -67,12 +67,12 @@ func (h *Handler) CreateContest(w http.ResponseWriter, r *http.Request) {
 		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
 		return
 	}
-	if err := db.CreateContest(h.DB, contest); err != nil {
+	if err := db.CreateContest(h.DB.WithContext(r.Context()), contest); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if isHTMX(r) {
-		contests, err := db.ListContests(h.DB)
+		contests, err := db.ListContests(h.DB.WithContext(r.Context()))
 		if err != nil {
 			log.Printf("list contests after create: %v", err)
 			hxRedirect(w, r, "/admin/contests")
@@ -101,7 +101,7 @@ func (h *Handler) UpdateContest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.ID = contest.ID
-	if err := db.UpdateContest(h.DB, input); err != nil {
+	if err := db.UpdateContest(h.DB.WithContext(r.Context()), input); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -117,7 +117,7 @@ func (h *Handler) DeleteContest(w http.ResponseWriter, r *http.Request) {
 		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
 		return
 	}
-	if err := db.DeleteContest(h.DB, contest.ID); err != nil {
+	if err := db.DeleteContest(h.DB.WithContext(r.Context()), contest.ID); err != nil {
 		log.Printf("delete contest: %v", err)
 		http.Error(w, "Could not delete contest.", http.StatusInternalServerError)
 		return
@@ -140,7 +140,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	series.ContestID = contest.ID
-	if err := db.CreateSeries(h.DB, series); err != nil {
+	if err := db.CreateSeries(h.DB.WithContext(r.Context()), series); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -162,7 +162,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.ID = series.ID
-	if err := db.UpdateSeries(h.DB, input); err != nil {
+	if err := db.UpdateSeries(h.DB.WithContext(r.Context()), input); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -178,7 +178,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
 		return
 	}
-	if err := db.DeleteSeries(h.DB, series.ID); err != nil {
+	if err := db.DeleteSeries(h.DB.WithContext(r.Context()), series.ID); err != nil {
 		log.Printf("delete series: %v", err)
 		http.Error(w, "Could not delete series.", http.StatusInternalServerError)
 		return
@@ -196,7 +196,7 @@ func (h *Handler) adminContest(w http.ResponseWriter, r *http.Request) (*db.Cont
 		http.NotFound(w, r)
 		return nil, false
 	}
-	contest, err := db.GetContest(h.DB, contestID)
+	contest, err := db.GetContest(h.DB.WithContext(r.Context()), contestID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)
 		return nil, false
@@ -220,7 +220,7 @@ func (h *Handler) adminSeries(w http.ResponseWriter, r *http.Request) (*db.Serie
 		http.NotFound(w, r)
 		return nil, false
 	}
-	series, err := db.GetSeries(h.DB, seriesID)
+	series, err := db.GetSeries(h.DB.WithContext(r.Context()), seriesID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)
 		return nil, false

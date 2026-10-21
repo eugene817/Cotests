@@ -189,7 +189,7 @@ func TestSeriesCRUD(t *testing.T) {
 	}
 }
 
-func TestPublicContestsRespectVisibilityAndSchedule(t *testing.T) {
+func TestPublicContestsShowPublishedArchivesAndSchedules(t *testing.T) {
 	database := testutil.NewDatabase(t)
 	now := time.Date(2026, time.September, 4, 12, 0, 0, 0, time.UTC)
 	past := now.Add(-time.Hour)
@@ -211,7 +211,7 @@ func TestPublicContestsRespectVisibilityAndSchedule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list public contests: %v", err)
 	}
-	if len(contests) != 1 || contests[0].ID != open.ID {
+	if len(contests) != 3 {
 		t.Fatalf("public contests = %#v", contests)
 	}
 	if _, err := db.GetPublicContest(database, open.ID, now); err != nil {

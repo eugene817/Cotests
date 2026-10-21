@@ -12,7 +12,7 @@ import (
 )
 
 func (h *Handler) PublicContests(w http.ResponseWriter, r *http.Request) {
-	contests, err := db.ListPublicContests(h.DB, time.Now().UTC())
+	contests, err := db.ListPublicContests(h.DB.WithContext(r.Context()), time.Now().UTC())
 	if err != nil {
 		log.Printf("list public contests: %v", err)
 		http.Error(w, "Could not load contests.", http.StatusInternalServerError)
@@ -33,7 +33,7 @@ func (h *Handler) PublicContest(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	contest, err := db.GetPublicContest(h.DB, contestID, time.Now().UTC())
+	contest, err := db.GetPublicContest(h.DB.WithContext(r.Context()), contestID, time.Now().UTC())
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)
 		return
@@ -43,7 +43,7 @@ func (h *Handler) PublicContest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not load contest.", http.StatusInternalServerError)
 		return
 	}
-	series, err := db.ListSeries(h.DB, contest.ID)
+	series, err := db.ListSeries(h.DB.WithContext(r.Context()), contest.ID)
 	if err != nil {
 		log.Printf("list public series: %v", err)
 		http.Error(w, "Could not load series.", http.StatusInternalServerError)

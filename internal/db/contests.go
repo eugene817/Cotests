@@ -33,9 +33,8 @@ func GetContest(database *gorm.DB, contestID uint) (*Contest, error) {
 
 func ListPublicContests(database *gorm.DB, now time.Time) ([]Contest, error) {
 	var contests []Contest
+	_ = now // Discovery is separate from the submission window.
 	if err := database.Where("visibility = ?", ContestPublished).
-		Where("start_at IS NULL OR start_at <= ?", now).
-		Where("end_at IS NULL OR end_at > ?", now).
 		Order("start_at ASC, id DESC").
 		Find(&contests).Error; err != nil {
 		return nil, err
@@ -45,10 +44,9 @@ func ListPublicContests(database *gorm.DB, now time.Time) ([]Contest, error) {
 
 func GetPublicContest(database *gorm.DB, contestID uint, now time.Time) (*Contest, error) {
 	var contest Contest
+	_ = now // A published contest remains available as an archive after it ends.
 	if err := database.Where("id = ?", contestID).
 		Where("visibility = ?", ContestPublished).
-		Where("start_at IS NULL OR start_at <= ?", now).
-		Where("end_at IS NULL OR end_at > ?", now).
 		First(&contest).Error; err != nil {
 		return nil, err
 	}
@@ -96,13 +94,16 @@ func validateContest(contest *Contest) error {
 		contest.Visibility = ContestDraft
 	}
 	if contest.Title == "" {
-		return fmt.Errorf("contest title is required")
+		return ValidationError{"contest title is required"}
+	}
+	if len(contest.Title) > 300 || len(contest.Description) > 100000 {
+		return ValidationError{"contest fields are too large"}
 	}
 	if contest.Visibility != ContestDraft && contest.Visibility != ContestPublished {
-		return fmt.Errorf("invalid contest visibility")
+		return ValidationError{"invalid contest visibility"}
 	}
 	if contest.StartAt != nil && contest.EndAt != nil && !contest.EndAt.After(*contest.StartAt) {
-		return fmt.Errorf("contest end time must be after start time")
+		return ValidationError{"contest end time must be after start time"}
 	}
 	return nil
 }

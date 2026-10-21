@@ -17,4 +17,9 @@ type PageData struct {
 	Contest   *db.Contest
 	Contests  []db.Contest
 	Series    []db.Series
+	Problems  []db.Problem
+	Problem   *db.Problem
+	Revision  *db.ProblemRevision
+	Revisions []db.ProblemRevision
+	Tests     []db.TestCase
 }

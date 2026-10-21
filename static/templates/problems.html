@@ -1,0 +1,19 @@
+{{define "problems"}}
+<main class="page page-wide">
+  <p class="eyebrow">Administration</p>
+  <div class="page-heading"><div><h1>Problems</h1><p class="lead">Draft content is private until its revision is published.</p></div><a class="btn btn-link" href="/admin/contests">Contests</a></div>
+  <section class="card" style="margin-bottom:var(--spacing-8)">
+    <div class="card-header"><h3>Create problem</h3></div>
+    <form method="post" action="/admin/problems" style="display:grid; gap:var(--spacing-4)">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div><label class="label-sm" for="problem-title">Title</label><input id="problem-title" name="title" required></div>
+      <div><label class="label-sm" for="problem-code">Code</label><input id="problem-code" name="code" required pattern="[A-Za-z0-9_-]+"></div>
+      <div><label class="label-sm" for="problem-statement">Statement</label><textarea id="problem-statement" name="statement" rows="8"></textarea></div>
+      <div><label class="label-sm" for="problem-languages">Language metadata (JSON)</label><input id="problem-languages" name="language_metadata" value="[]"></div>
+      <div><label class="label-sm" for="problem-checker">Checker metadata</label><input id="problem-checker" name="checker_metadata"></div>
+      <div><button class="btn btn-primary" type="submit">Create draft</button></div>
+    </form>
+  </section>
+  <section class="stack"><h2>All problems</h2>{{range .Problems}}<article class="card"><p class="eyebrow">{{.Code}}</p><h3><a href="/admin/problems/{{.ID}}">{{.Title}}</a></h3></article>{{else}}<div class="empty-state"><h3>No problems yet</h3><p>Create the first draft above.</p></div>{{end}}</section>
+</main>
+{{end}}

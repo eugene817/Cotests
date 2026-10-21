@@ -8,9 +8,15 @@ The judge is an interface plus a side-effect-free Noop. Its design belongs to th
 
 ## Current state
 
-Accounts and contest/series CRUD exist. Minor SQLite, HTMX empty-state and password form fixes are implemented on refine-plan-fixes. The judge placeholder package exists, but there are no problem/test/submission models or routes yet.
+Accounts, contest/series CRUD, problem revisions/tests, private artifacts and the
+judge placeholder exist. MR 1 (B0–B4) adds the scoped access/content backend:
+memberships, series schedules, assignment/read operations, PDF delivery and ZIP
+preview/commit. See [HTTP_API.md](HTTP_API.md). Author/participant frontend screens
+still need completion. No submission models or routes exist yet.
 
-We are in M0 of [ROADMAP.md](ROADMAP.md), corresponding to partial Phase 2 in the original roadmap. M2 will be a submission-collection alpha; M3 will be the web MVP. Full replacement also needs M4 and the deferred judge work.
+The product remains in M1 of [ROADMAP.md](ROADMAP.md). MR 2 (B5–B8) completes the
+remaining server MVP; frontend work then completes the browser workflows. Full
+replacement also needs M4 and the deferred judge work.
 
 ## Included scope
 
@@ -52,12 +58,12 @@ IDs C01–C15 remain stable references; engine-related scopes have been explicit
 | --- | --- | --- | --- | --- |
 | C01 | Done | M0: SQLite integrity | Existing DB | Replacement connections retain FK enforcement and caller DSN settings; cascades and invalid-parent checks pass. |
 | C02 | Done | M0: operator bootstrap | Existing auth | Public registration cannot create an admin; the local password-confirmed command creates an administrator; existing roles survive upgrade. |
-| C03 | In review | M0: migrations/configuration | C01 | Versioned upgrades and explicit data directory/public URL are implemented; run the supported PostgreSQL check against the intended deployment. |
-| C04 | Pending | M0: request/access policies | C02, C03 | CSRF/origin/throttle checks and publication/schedule boundaries pass. |
+| C03 | In review | M0: migrations/configuration | C01 | Versioned upgrades, explicit data/artifact directories and limits are implemented; run the supported PostgreSQL check against the intended deployment. |
+| C04 | Backend complete | M0: request/access policies | C02, C03 | Signed session-bound CSRF/origin checks, bounded auth work, archive discovery, scoped membership and content/file policies are implemented. Submission/account policies follow in MR 2. |
 | C05 | Done | M1: interface plus Noop only | None | Interface compiles; Noop only returns ErrUnavailable. It has no executor, dependencies or side effects. Not integrated into a submission flow yet. |
-| C06 | Pending | M1: problem/revision/test model | C03, C04 | Editing a draft cannot mutate a published revision; grading configuration is stored as metadata. |
-| C07 | Pending | M1: private assets and authoring UI | C06 | Publish statement/PDF/sample/test content; unauthorized access fails; bounded imports validate before commit. |
-| C08 | Pending | M1: original-format inventory | Source review | Capture representative XML packages and required checker/language IDs without running them. |
+| C06 | Done | M1: problem/revision/test model | C03, C04 | Drafts, immutable published revisions, series assignments and test metadata are schema-backed; grading configuration is metadata only. |
+| C07 | Backend complete; UI partial | M1: private assets and authoring UI | C06 | Protected PDF/sample/test delivery, assignment operations, immutable revisions, storage bounds and ZIP preview/commit exist through the API. Frontend authoring/participant flows remain. |
+| C08 | Partial | M1: original-format inventory | Source review | Legacy XML/checker/language fields are documented and bounded flat `.in`/`.out` ZIP validation exists; representative institutional exports remain required. |
 | C09 | Pending | M2: save source | C06, C07 | Source persists once; retry, ownership and opening/closing checks pass. |
 | C10 | Pending | M2: disabled-judge service integration | C05, C09 | ErrUnavailable keeps a saved submission unjudged; no queue or repeated evaluation requests are created. |
 | C11 | Pending | M2: history/source/status UI | C09, C10 | Owner sees saved source and unavailable grading; no verdict/metrics/score appears. |

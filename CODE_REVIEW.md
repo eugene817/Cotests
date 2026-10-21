@@ -1,5 +1,18 @@
 # Code and legacy review
 
+## MR 1 implementation follow-up (2026-10-21)
+
+The historical findings below describe the original review, not the current
+working tree. MR 1/B0–B4 adds scoped memberships/schedules, content API, protected
+PDF/sample delivery, transactional reordering, revision/test locking and ZIP
+preview/commit with compensating filesystem cleanup. Request contexts, bounded
+authentication work, signed session-bound CSRF, template serving restrictions
+and DB-independent liveness address the corresponding maintenance observations.
+Session integrity and public upcoming/archive discovery are already implemented.
+See [HTTP_API.md](HTTP_API.md) for current behavior. PostgreSQL content/migration
+checks are configured in CI; local PostgreSQL execution requires a running server.
+Submissions, account lifecycle, clarifications and restore rehearsal are MR 2.
+
 Review date: 2026-09-08.
 
 Cotests reviewed at `60e51c524c4cd643f9cc6b2d9424e492e8b510ca`; original ZawodyWeb inspected at `0d1e68e4cda77b539774f95ce87808bf0966cb17`.

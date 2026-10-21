@@ -36,6 +36,9 @@ func main() {
 	if err := config.EnsureDataDir(runtime.DataDir); err != nil {
 		log.Fatal(err)
 	}
+	if err := config.EnsureDataDir(runtime.ArtifactDir); err != nil {
+		log.Fatal(err)
+	}
 	dsn := runtime.DatabaseDSN
 	if len(os.Args) > 1 {
 		if err := runCommand(os.Args[1:], dsn, terminalPasswordPrompt(os.Stdin, os.Stdout), os.Stdout); err != nil {
@@ -62,7 +65,13 @@ func main() {
 	}
 
 	r := server.NewRouter(database, http.FileServer(http.FS(sub)), tpl, server.Config{
-		SecureCookies: runtime.SecureCookies,
+		SecureCookies:    runtime.SecureCookies,
+		PublicURL:        runtime.PublicURL,
+		ArtifactDir:      runtime.ArtifactDir,
+		MaxArtifactBytes: runtime.MaxArtifactBytes,
+		MaxStorageBytes:  runtime.MaxStorageBytes,
+		MaxImportBytes:   runtime.MaxImportBytes,
+		MaxImportFiles:   runtime.MaxImportFiles,
 	})
 	httpServer := &http.Server{Addr: runtime.ListenAddress, Handler: r, ReadHeaderTimeout: 5 * time.Second}
 

@@ -37,7 +37,7 @@ func TestMigrateRecordsEachVersionAndIsIdempotent(t *testing.T) {
 	if err := database.Order("version ASC").Find(&records).Error; err != nil {
 		t.Fatalf("read migration records: %v", err)
 	}
-	if got, want := len(records), 4; got != want {
+	if got, want := len(records), 7; got != want {
 		t.Fatalf("migration records = %d, want %d", got, want)
 	}
 	for index, record := range records {

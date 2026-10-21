@@ -1,0 +1,31 @@
+{{define "problem_detail"}}
+<main class="page page-wide">
+  <a class="btn btn-link" href="/admin/problems">Back to problems</a>
+  <p class="eyebrow">{{.Problem.Code}} · revision {{.Revision.Number}} · {{.Revision.State}}</p>
+  <div class="page-heading"><div><h1>{{.Problem.Title}}</h1><p class="lead">Published revisions cannot be changed. Start a new draft for later edits.</p></div></div>
+  <div id="problem-error" aria-live="polite"></div>
+  {{if eq .Revision.State "draft"}}
+  <section class="card" style="margin-bottom:var(--spacing-8)"><div class="card-header"><h3>Draft revision</h3></div>
+    <form method="post" action="/admin/problems/{{.Problem.ID}}/revisions/{{.Revision.ID}}" style="display:grid;gap:var(--spacing-4)">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div><label class="label-sm" for="statement">Statement</label><textarea id="statement" name="statement" rows="12">{{.Revision.Statement}}</textarea></div>
+      <div><label class="label-sm" for="languages">Language metadata (JSON)</label><input id="languages" name="language_metadata" value="{{.Revision.LanguageMetadata}}"></div>
+      <div><label class="label-sm" for="checker">Checker metadata</label><input id="checker" name="checker_metadata" value="{{.Revision.CheckerMetadata}}"></div>
+      <div style="display:flex;gap:var(--spacing-3);flex-wrap:wrap"><button class="btn btn-primary" type="submit">Save draft</button></div>
+    </form>
+    <form method="post" action="/admin/problems/{{.Problem.ID}}/revisions/{{.Revision.ID}}/publish" style="margin-top:var(--spacing-4)"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="btn btn-secondary" type="submit">Publish revision</button></form>
+  </section>
+  <section class="card" style="margin-bottom:var(--spacing-8)"><div class="card-header"><h3>Add test</h3></div>
+    <form method="post" action="/admin/problems/{{.Problem.ID}}/revisions/{{.Revision.ID}}/tests" style="display:grid;gap:var(--spacing-4)"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+      <div><label class="label-sm" for="test-position">Position</label><input id="test-position" type="number" min="0" name="position" required></div>
+      <label><input type="checkbox" name="is_sample"> Sample test (input/output may be shown after release)</label>
+      <div><label class="label-sm" for="test-input">Input</label><textarea id="test-input" name="input" rows="5"></textarea></div>
+      <div><label class="label-sm" for="test-output">Expected output</label><textarea id="test-output" name="output" rows="5"></textarea></div>
+      <div><button class="btn btn-primary" type="submit">Store test</button></div>
+    </form>
+  </section>
+  {{end}}
+  <section class="stack"><h2>Tests</h2>{{range .Tests}}<article class="card"><p class="eyebrow">Position {{.Position}}</p><h3>{{if .IsSample}}Sample{{else}}Hidden{{end}} test</h3><p>Private input and expected output are stored outside public static assets.</p></article>{{else}}<div class="empty-state"><p>No tests in this revision.</p></div>{{end}}</section>
+  <section class="stack" style="margin-top:var(--spacing-8)"><h2>Revisions</h2>{{range .Revisions}}<a class="card" href="/admin/problems/{{$.Problem.ID}}?revision={{.ID}}">Revision {{.Number}} · {{.State}}</a>{{end}}<form method="post" action="/admin/problems/{{.Problem.ID}}/revisions"><input type="hidden" name="csrf_token" value="{{.CSRFToken}}"><button class="btn btn-secondary" type="submit">Create next draft</button></form></section>
+</main>
+{{end}}

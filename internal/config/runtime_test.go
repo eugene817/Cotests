@@ -11,7 +11,7 @@ func TestLoadDefaultsAndDataDirectoryDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.DataDir != "." || config.DatabaseDSN != "cotests.db" || config.ListenAddress != ":3000" {
+	if config.DataDir != "." || config.ArtifactDir != "artifacts" || config.DatabaseDSN != "cotests.db" || config.ListenAddress != ":3000" || config.MaxArtifactBytes != 10<<20 || config.MaxImportFiles != 100 || config.MaxStorageBytes != 1<<30 {
 		t.Fatalf("default config = %#v", config)
 	}
 
@@ -26,6 +26,39 @@ func TestLoadDefaultsAndDataDirectoryDatabase(t *testing.T) {
 	}
 	if config.DatabaseDSN != filepath.Join("runtime-data", "cotests.db") {
 		t.Fatalf("database DSN = %q", config.DatabaseDSN)
+	}
+	if config.ArtifactDir != filepath.Join("runtime-data", "artifacts") {
+		t.Fatalf("artifact directory = %q", config.ArtifactDir)
+	}
+}
+
+func TestLoadRejectsInvalidLimits(t *testing.T) {
+	for _, key := range []string{"MAX_ARTIFACT_BYTES", "MAX_IMPORT_BYTES", "MAX_IMPORT_FILES", "MAX_STORAGE_BYTES"} {
+		t.Run(key, func(t *testing.T) {
+			_, err := Load(func(current string) string {
+				if current == key {
+					return "0"
+				}
+				return ""
+			})
+			if err == nil {
+				t.Fatal("invalid limit was accepted")
+			}
+		})
+	}
+}
+
+func TestLoadRejectsUnboundedUploadSettings(t *testing.T) {
+	for key, value := range map[string]string{"MAX_ARTIFACT_BYTES": "9223372036854775807", "MAX_IMPORT_BYTES": "536870913", "MAX_IMPORT_FILES": "10001"} {
+		_, err := Load(func(name string) string {
+			if name == key {
+				return value
+			}
+			return ""
+		})
+		if err == nil {
+			t.Fatalf("%s accepted an unbounded setting", key)
+		}
 	}
 }
 

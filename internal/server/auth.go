@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"fmt"
+	"html"
 	"net/http"
+	"strings"
 	"time"
 
 	"cotests/internal/db"
@@ -32,19 +34,20 @@ func (p CookieSessionProvider) GetUser(r *http.Request) *db.User {
 		return nil
 	}
 
-	session, err := db.GetSessionByToken(p.DB, cookie.Value)
+	database := p.DB.WithContext(r.Context())
+	session, err := db.GetSessionByToken(database, cookie.Value)
 	if err != nil {
 		return nil
 	}
 	if time.Now().After(session.ExpiresAt) {
-		if err := db.DeleteSession(p.DB, session.ID); err != nil {
+		if err := db.DeleteSession(database, session.ID); err != nil {
 			return nil
 		}
 		return nil
 	}
 
 	var user db.User
-	if err := p.DB.First(&user, session.UserID).Error; err != nil {
+	if err := database.First(&user, session.UserID).Error; err != nil {
 		return nil
 	}
 	return &user
@@ -53,6 +56,10 @@ func (p CookieSessionProvider) GetUser(r *http.Request) *db.User {
 func AuthMiddleware(provider IdentityProvider) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/static/") || r.URL.Path == "/live" {
+				next.ServeHTTP(w, r)
+				return
+			}
 			user := provider.GetUser(r)
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, user)))
 		})
@@ -96,7 +103,7 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 func renderAccessError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	fmt.Fprintf(w, `<div class="card surface-container-highest" role="alert">%s</div>`, message)
+	fmt.Fprintf(w, `<div class="card surface-container-highest" role="alert">%s</div>`, html.EscapeString(message))
 }
 
 func isHTMX(r *http.Request) bool {

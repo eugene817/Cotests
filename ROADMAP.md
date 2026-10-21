@@ -15,18 +15,24 @@ Updated: 2026-09-08. Cotests is a remake of ZawodyWeb with additional functional
 
 Original roadmap: Phase 1 recorded complete; Phase 2 partially implemented through contest/series management.
 
-Revised roadmap: **M0, partially complete**. The small fixes and administrator bootstrap below are implemented; broader foundation changes remain pending. There are still no problem, test or submission models/routes.
+Revised roadmap: **M1, partially complete**. MR 1/B0–B4 supplies the content backend:
+scoped memberships, schedules, revision/test authoring, assignments, participant
+statement/sample/PDF access and ZIP preview/commit. Frontend flows remain partial.
+There are still no submissions or judge routes. [HTTP_API.md](HTTP_API.md) records
+the implemented contract; MR 2/B5–B8 is the next backend changeset.
 
 - [x] Go/chi, embedded HTMX/templates/CSS, GORM and SQLite with a selectable PostgreSQL driver.
 - [x] Registration/login/logout, bcrypt, hashed sessions, global admin/user guards and current POST CSRF checks.
-- [x] Contest/series CRUD and active published-contest browsing.
+- [x] Contest/series CRUD and published contest discovery, including upcoming and archived schedules.
 - [x] SQLite foreign keys survive connection replacement; regression coverage includes existing DSN options.
 - [x] HTMX contest creation replaces the list, removing its stale empty state.
 - [x] Password form/error text follows the existing byte-length rule; associated labels and autocomplete added.
 - [x] Public registration always creates a user; a local terminal command creates administrators after password confirmation.
 - [x] Minimal judge interface and Noop implementation returning ErrUnavailable. No submission endpoint uses it yet.
-- [ ] Operator bootstrap, throttling, versioned migrations, scoped memberships and broader resource policies.
-- [ ] Problems, tests, submission persistence/history and the rest of the web MVP.
+- [x] Versioned migrations, explicit runtime storage configuration, request CSRF/origin checks and bounded in-process authentication attempts.
+- [x] Draft/published problem revisions and manual private sample/hidden tests for administrators.
+- [x] Backend scoped memberships, PDF/artifact delivery, assignments and ZIP preview/commit.
+- [ ] Frontend completion, submission persistence/history and the rest of the web MVP.
 
 ## Release sequence
 
@@ -47,18 +53,20 @@ Revised roadmap: **M0, partially complete**. The small fixes and administrator b
 - [x] C01: fix SQLite connection integrity.
 - [x] C02: introduce operator-controlled admin creation and preserve existing administrators.
 - [ ] C03: versioned migrations and explicit data/public-URL configuration are implemented; run the opt-in PostgreSQL integration check against the intended deployment before marking complete.
-- [ ] C04: central CSRF/origin protection, authentication limits and explicit publication/access policies.
+- [x] C04 backend: signed session-bound CSRF/origin protection, authentication limits and scoped publication/access policies.
 - [x] Fix the stale contest-list message and auth form byte-length mismatch.
-- [ ] Follow up on series reordering, private templates, request contexts, readiness, responsive layouts and backup instructions.
+- [x] Backend transactional series/task reordering, private template delivery, request contexts and DB-independent liveness.
+- [ ] Release readiness/restore rehearsal (MR 2), responsive browser flows (frontend).
 
 The bootstrap/auth/migration changes are separate implementation tasks. They are not included in this branch's minor fixes.
 
 ## M1 — Problem authoring
 
 - [x] C05: provide only the provisional judge interface/Noop package.
-- [ ] C06: Problem, ProblemRevision, SeriesProblem, TestCase and language/checker metadata references.
-- [ ] C07: private artifacts, authoring/publication UI, Markdown/PDF, samples, hidden tests and bounded tests ZIP import.
-- [ ] Scoped organizer/participant access and validation of content metadata.
+- [x] C06: Problem, ProblemRevision, SeriesProblem, TestCase and language/checker metadata references.
+- [x] C07 backend: private artifacts/PDF, samples, hidden tests and bounded ZIP preview/commit.
+- [ ] C07 frontend: complete authoring/publication/participant UI and readable statement rendering.
+- [x] Scoped organizer/participant backend access and validation of content metadata.
 - [ ] C08: record original XML/checker/language identifiers and representative import fixtures without executing any checker.
 
 Limits, language selections and checker names are metadata at this stage. Validate their structure; do not claim runtime support or enforce grading semantics through a new engine.
@@ -98,12 +106,13 @@ Use [JUDGE.md](JUDGE.md) as the discussion boundary. Agree execution isolation, 
 
 Only after that design is agreed, create a separate implementation backlog and verify required legacy behavior. Previous Linux worker, Isolate, job lease and C++/Python execution proposals are not selected requirements for this branch or web MVP.
 
-## Immediate implementation order after review
+## Backend delivery sequence
 
-1. C03–C04: remaining foundation tasks.
-2. C06–C08: author/publish/read problems and record legacy formats.
-3. C09–C12: save submissions with explicit unjudged status and disabled result actions.
-4. C13–C15: finish and verify the web MVP.
-5. Continue M4 while professor-led design proceeds separately when scheduled.
+1. MR 1/B0–B4: content/access/file backend implemented; verify PostgreSQL CI gate.
+2. MR 2/B5–B8: source persistence/history, account lifecycle, clarifications,
+   administration and operational release checks (C09–C15 backend).
+3. Frontend: complete authoring/participant forms and browser release checks.
+4. Continue C08 representative institutional fixtures and M4 parity while the
+   professor-led judge design proceeds separately when scheduled.
 
 C01 and C05 are implemented at their deliberately limited scope. C01–C15 identifiers are retained, but C05 and C10–C12 have been revised from the earlier engine-first plan to match the user's decision. No calendar dates are promised.

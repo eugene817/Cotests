@@ -10,7 +10,10 @@ Release definitions: [ROADMAP.md](ROADMAP.md), [MVP.md](MVP.md), [FEATURE_PARITY
 
 Preserve ZawodyWeb's contest, authoring and participant workflows while improving usability and maintainability. Build the web application independently from the judging engine.
 
-The current MVP supports authoring and collecting submissions. Saved code remains unjudged; result-dependent views explicitly state their unavailable status. It does not run a graded contest.
+The target MVP supports authoring and collecting submissions. MR 1/B0–B4 now
+implements the content/access/file backend; MR 2/B5–B8 will add submissions and
+the remaining lifecycle/operational features. Saved code will remain unjudged.
+Implemented routes and data contracts are in [HTTP_API.md](HTTP_API.md).
 
 Keep the user-facing hierarchy **Contest → Series → Problem**. Separate reusable problem identity from its assignment to a contest so that later cloning, reuse and revision history remain manageable.
 
@@ -25,8 +28,8 @@ The first installation is assumed to serve one institution. Enrollment, account 
 | Style | Keep The Digital Atelier and CSS tokens | Extract repeated layouts and verify accessibility/mobile flows incrementally. |
 | Data layer | Keep GORM, SQLite, optional PostgreSQL and versioned migrations | Run the opt-in PostgreSQL integration check against each supported deployment. |
 | SQLite | Enable foreign keys through the DSN on every connection; keep the existing single-connection pool | Tune WAL/concurrency only against deployment needs. |
-| Files | Plan private filesystem artifacts plus DB metadata/hashes | Object storage or a bounded BLOB backend can be considered separately. |
-| Auth | Keep opaque cookie sessions and bcrypt | Operator bootstrap, throttling, recovery and scoped membership are foundation work. |
+| Files | Private immutable filesystem artifacts plus DB metadata/hashes, transactional references and grace-period cleanup | Object storage can be considered separately. |
+| Auth | Opaque cookie sessions, bcrypt, local admin bootstrap, throttling and scoped membership | Recovery and account lifecycle are MR 2 work. |
 | Judge | Implement only the provisional Judge interface and Noop returning ErrUnavailable | Engine, runner, protocol, queue, checkers, languages, metrics and scoring are professor-led design. |
 | Operations | Web configuration, migrations, backups and request/storage limits | Judge deployment and operational controls wait for its design. |
 
@@ -77,7 +80,9 @@ Restrict deletion once submissions reference a problem or contest. Archive those
 
 ## Publication and authorization
 
-Separate discovering a contest, reading its statements, submitting source and viewing results. The current active-contest-only queries still need this policy change.
+Discovery and statement release are separate. Published schedules remain public;
+released statements require membership. Shared content policies implement these
+checks and future submission eligibility; results remain unavailable.
 
 Published upcoming contests may expose schedule/rules without unreleased problems. Ended contests remain discoverable according to archive policy. Store absolute time in UTC and a display timezone; use server-side half-open intervals for source submission acceptance.
 
@@ -112,15 +117,17 @@ internal/
   auth/                  # existing password/security primitives
   db/                    # queries, models and future versioned migrations
   judge/judge.go         # interface and Noop only; implemented
-  contest/               # future schedule/membership/publication services
-  problem/               # future authoring/revision services
+  content/               # implemented scoped policies, publication/file workflows
   submission/            # future persistence/ownership + judge boundary
-  artifact/              # future private file handling
-  importer/              # future native/legacy format adapters
+  artifact/              # private immutable files, per-file/total limits
+  importer/              # bounded flat test ZIP validation; legacy adapters later
 static/                  # existing public assets and templates
 ```
 
-Moving templates outside the public static subtree remains a small future cleanup. Do not scaffold empty feature packages now. Services own use-case transactions, HTTP handlers parse/render, and data access stays explicit.
+Templates remain embedded with the existing UI but are excluded from public
+delivery: only CSS/JS asset trees are served. No empty feature packages are
+scaffolded. Content services own access/file transactions, HTTP handlers parse
+and serialize, and data access remains explicit.
 
 Add request contexts and pagination as workflows grow. Stream large artifacts, keep transactions short and avoid loading identity for static/liveness requests. The current contest-creation response now replaces the full list to keep empty-state behavior consistent; paginate when actual volume warrants it.
 

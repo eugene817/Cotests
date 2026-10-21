@@ -16,19 +16,34 @@ Reviewed 2026-09-08. This document distinguishes implemented behavior from the p
 - Current POST handlers validate the csrf_token cookie against a submitted form/header token.
 - Ordinary unauthenticated protected-page requests redirect to login; HTMX requests receive a 401 fragment. Role denial returns 403.
 
-Profile editing, password change/recovery, account disabling, contest membership and configurable roles are not implemented.
+MR 1 additionally implements scoped contest organizer/participant membership,
+series release/submission-window policies and protected content/artifact access.
+Browser mutations use centralized origin checks and HMAC-signed, session-bound
+CSRF tokens. Authentication attempts are bounded per IP/account with a global
+concurrency budget. See [HTTP_API.md](HTTP_API.md) and [BACKEND_MR1.md](BACKEND_MR1.md).
+
+Profile editing, password change/recovery and account disabling are MR 2 work.
 
 ## M0 — Changes required before public deployment
 
 **Bootstrap.** Implemented: `cotests admin create --email … [--name …]` opens and migrates the configured database, then requests and confirms a hidden terminal password before creating an administrator. Public registration always creates an ordinary account; existing administrators are preserved. The command rejects duplicate emails and non-interactive password input.
 
-**Abuse protection.** Add bounded per-account/per-IP attempt budgets and a global cap on concurrent password hashing. Configure trusted proxies before consuming forwarded addresses. Keep generic login failures and avoid indefinite account lockout. Cover enumeration/timing behavior without claiming exact timing equality.
+**Abuse protection.** Implemented: bounded per-account/per-IP attempt budgets,
+expiring bounded buckets and a global cap on concurrent authentication work.
+Forwarded addresses are not trusted. Account lifecycle and further abuse checks
+remain MR 2 work.
 
-**CSRF.** Move browser mutation protection into centralized middleware, with bounded form parsing. Use a reviewed signed/session-bound token design and origin validation. Cover anonymous login/registration as well as authenticated forms. Render the token in forms/page metadata for HTMX; rotate appropriately with authentication changes and retain usable error/recovery flows. Authentication for any future judge API belongs to the professor-led design; no such API is implemented now.
+**CSRF.** Implemented: centralized protection, bounded parsing and origin checks;
+HMAC-signed tokens bind to the presented session cookie. Forms retain their token
+field; JSON/multipart use `X-CSRF-Token`. Fetch a fresh token after authentication
+changes or process restart. Anonymous login/registration are also protected.
+Authentication for any future judge API remains part of the deferred design.
 
 **Cookies and deployment.** Validate the configured public URL and Secure cookies in HTTPS deployments. Consider host-prefixed cookies for production. Keep loopback development explicit. Cookies, source code, passwords and CSRF tokens must not appear in logs.
 
-**Database integrity.** Add a Session-to-User foreign key, expiry index and appropriate null constraints through a versioned migration. Propagate request context to lookups and distinguish operational database errors in logs from invalid credentials without exposing internals.
+**Database integrity.** Session foreign keys, expiry indexing and null constraints
+are versioned migrations. HTTP lookups propagate request contexts. Content API
+errors distinguish validation/access/conflict from operational failures.
 
 These changes follow the relevant [OWASP authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html) and [CSRF](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) guidance.
 

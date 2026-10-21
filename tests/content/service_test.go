@@ -16,7 +16,7 @@ import (
 	"cotests/internal/content"
 	"cotests/internal/db"
 	"cotests/internal/importer"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 	"gorm.io/gorm"
 )
 

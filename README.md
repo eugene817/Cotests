@@ -56,6 +56,11 @@ orphaned sessions exist, rather than deleting them.
 
 ## Verification
 
+All tests live under `tests/`, grouped by component. Shared test helpers are in
+`tests/internal/testutil/`, and historical database fixtures are in
+`tests/db/testdata/`. Run only the test suites with `go test ./tests/...`, or use
+the repository-wide checks below:
+
 ```bash
 go test ./...
 go vet ./...

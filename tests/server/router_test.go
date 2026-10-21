@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"net/http"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 )
 
 func TestLoginSetsSessionAndHTMXRedirect(t *testing.T) {
@@ -453,7 +453,7 @@ func TestHTMXGuestIsDeniedWithFragment(t *testing.T) {
 	}
 }
 
-func TestValidateCredentials(t *testing.T) {
+func TestRegisterValidatesCredentials(t *testing.T) {
 	tests := []struct {
 		name     string
 		email    string
@@ -471,19 +471,51 @@ func TestValidateCredentials(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateCredentials(tt.email, tt.password)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validateCredentials() error = %v, want error %t", err, tt.wantErr)
+			router, _ := newTestRouter(t)
+			csrf := getCSRFCookie(t, router, "/register")
+			request := formRequest(http.MethodPost, "/register", url.Values{
+				"email": {tt.email}, "password": {tt.password}, "csrf_token": {csrf.Value},
+			}, csrf)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			wantStatus := http.StatusSeeOther
+			if tt.wantErr {
+				wantStatus = http.StatusBadRequest
+			}
+			if response.Code != wantStatus {
+				t.Fatalf("registration status = %d, want %d: %s", response.Code, wantStatus, response.Body.String())
 			}
 		})
 	}
 }
 
-func TestConstantTimeEqual(t *testing.T) {
-	if !constantTimeEqual("same", "same") {
-		t.Fatal("equal strings were not equal")
-	}
-	if constantTimeEqual("same", "different") || constantTimeEqual("same", "same!") {
-		t.Fatal("different strings were equal")
+func TestCSRFTokenComparison(t *testing.T) {
+	for _, variant := range []string{"matching", "different", "longer"} {
+		t.Run(variant, func(t *testing.T) {
+			router, _ := newTestRouter(t)
+			csrf := getCSRFCookie(t, router, "/register")
+			token := csrf.Value
+			wantStatus := http.StatusSeeOther
+			switch variant {
+			case "different":
+				// Change one byte without changing the token length.
+				if token[0] == 'a' {
+					token = "b" + token[1:]
+				} else {
+					token = "a" + token[1:]
+				}
+				wantStatus = http.StatusForbidden
+			case "longer":
+				token += "!"
+				wantStatus = http.StatusForbidden
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, formRequest(http.MethodPost, "/register", url.Values{
+				"email": {"user@example.com"}, "password": {"password1"}, "csrf_token": {token},
+			}, csrf))
+			if response.Code != wantStatus {
+				t.Fatalf("CSRF %s status = %d, want %d", variant, response.Code, wantStatus)
+			}
+		})
 	}
 }

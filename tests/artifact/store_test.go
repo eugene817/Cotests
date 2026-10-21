@@ -1,17 +1,18 @@
-package artifact
+package artifact_test
 
 import (
 	"os"
 	"strings"
 	"testing"
 
-	"cotests/internal/testutil"
+	"cotests/internal/artifact"
+	"cotests/tests/internal/testutil"
 )
 
 func TestStoreKeepsArtifactsPrivateAndBounded(t *testing.T) {
 	database := testutil.NewDatabase(t)
 	owner := testutil.CreateAdmin(t, database, "author@example.com")
-	store := Store{Root: t.TempDir(), MaxBytes: 3}
+	store := artifact.Store{Root: t.TempDir(), MaxBytes: 3}
 	artifact, err := store.Save(database, owner.ID, "../input.txt", "text/plain", strings.NewReader("abc"))
 	if err != nil {
 		t.Fatalf("save artifact: %v", err)

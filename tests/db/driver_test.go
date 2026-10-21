@@ -1,6 +1,9 @@
-package db
+package db_test
 
-import "testing"
+import (
+	"cotests/internal/db"
+	"testing"
+)
 
 func TestIsPostgres(t *testing.T) {
 	tests := []struct {
@@ -16,8 +19,8 @@ func TestIsPostgres(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.dsn, func(t *testing.T) {
-			if got := isPostgres(tt.dsn); got != tt.want {
-				t.Fatalf("isPostgres(%q) = %t, want %t", tt.dsn, got, tt.want)
+			if got := db.IsPostgres(tt.dsn); got != tt.want {
+				t.Fatalf("IsPostgres(%q) = %t, want %t", tt.dsn, got, tt.want)
 			}
 		})
 	}

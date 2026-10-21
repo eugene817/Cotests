@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 )
 
 func TestPostgresMigrations(t *testing.T) {

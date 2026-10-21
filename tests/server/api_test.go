@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"archive/zip"
@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 )
 
 func TestRequestProtectionRejectsCrossOriginPost(t *testing.T) {

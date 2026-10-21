@@ -1,8 +1,9 @@
-package importer
+package importer_test
 
 import (
 	"archive/zip"
 	"bytes"
+	"cotests/internal/importer"
 	"os"
 	"testing"
 )
@@ -18,14 +19,14 @@ func TestReadTestZIPValidatesPairsAndPaths(t *testing.T) {
 		_ = writer.Close()
 		return result.Bytes()
 	}
-	pairs, err := ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"01.in": "1", "01.out": "2"})), Limits{MaxBytes: 1024, MaxFiles: 2})
+	pairs, err := importer.ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"01.in": "1", "01.out": "2"})), importer.Limits{MaxBytes: 1024, MaxFiles: 2})
 	if err != nil || len(pairs) != 1 || string(pairs[0].Output) != "2" {
 		t.Fatalf("pairs = %#v, err = %v", pairs, err)
 	}
-	if _, err := ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"../bad.in": "1", "../bad.out": "2"})), Limits{MaxBytes: 1024, MaxFiles: 2}); err == nil {
+	if _, err := importer.ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"../bad.in": "1", "../bad.out": "2"})), importer.Limits{MaxBytes: 1024, MaxFiles: 2}); err == nil {
 		t.Fatal("unsafe path accepted")
 	}
-	if _, err := ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"one.in": "1"})), Limits{MaxBytes: 1024, MaxFiles: 2}); err == nil {
+	if _, err := importer.ReadTestZIP(bytes.NewReader(makeZIP(map[string]string{"one.in": "1"})), importer.Limits{MaxBytes: 1024, MaxFiles: 2}); err == nil {
 		t.Fatal("unpaired input accepted")
 	}
 }
@@ -57,7 +58,7 @@ func TestReadTestZIPRejectsSpecialFilesDuplicatesAndExpansion(t *testing.T) {
 				_, _ = file.Write([]byte(test.data))
 			}
 			_ = writer.Close()
-			if _, err := ReadTestZIP(bytes.NewReader(raw.Bytes()), Limits{MaxBytes: test.limit, MaxFiles: 10}); err == nil {
+			if _, err := importer.ReadTestZIP(bytes.NewReader(raw.Bytes()), importer.Limits{MaxBytes: test.limit, MaxFiles: 10}); err == nil {
 				t.Fatal("invalid ZIP accepted")
 			}
 		})

@@ -131,8 +131,8 @@ Keep both data and artifacts in backups; the restore rehearsal is MR 2/B8.
 
 ## Verification
 
-`internal/server/api_test.go` exercises the complete HTTP author/participant flow.
-`internal/content/service_test.go` runs the policy, revision, concurrency, quota
+`tests/server/api_test.go` exercises the complete HTTP author/participant flow.
+`tests/content/service_test.go` runs the policy, revision, concurrency, quota
 and import contract on SQLite and, with `COTESTS_TEST_POSTGRES_DSN`, PostgreSQL.
 CI provisions a disposable PostgreSQL service. The same DSN enables the existing
 migration checks; each integration test creates/drops only its random schema.

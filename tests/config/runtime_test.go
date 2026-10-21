@@ -1,13 +1,14 @@
-package config
+package config_test
 
 import (
+	runtimeconfig "cotests/internal/config"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestLoadDefaultsAndDataDirectoryDatabase(t *testing.T) {
-	config, err := Load(func(string) string { return "" })
+	config, err := runtimeconfig.Load(func(string) string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -15,7 +16,7 @@ func TestLoadDefaultsAndDataDirectoryDatabase(t *testing.T) {
 		t.Fatalf("default config = %#v", config)
 	}
 
-	config, err = Load(func(key string) string {
+	config, err = runtimeconfig.Load(func(key string) string {
 		if key == "DATA_DIR" {
 			return "runtime-data"
 		}
@@ -35,7 +36,7 @@ func TestLoadDefaultsAndDataDirectoryDatabase(t *testing.T) {
 func TestLoadRejectsInvalidLimits(t *testing.T) {
 	for _, key := range []string{"MAX_ARTIFACT_BYTES", "MAX_IMPORT_BYTES", "MAX_IMPORT_FILES", "MAX_STORAGE_BYTES"} {
 		t.Run(key, func(t *testing.T) {
-			_, err := Load(func(current string) string {
+			_, err := runtimeconfig.Load(func(current string) string {
 				if current == key {
 					return "0"
 				}
@@ -50,7 +51,7 @@ func TestLoadRejectsInvalidLimits(t *testing.T) {
 
 func TestLoadRejectsUnboundedUploadSettings(t *testing.T) {
 	for key, value := range map[string]string{"MAX_ARTIFACT_BYTES": "9223372036854775807", "MAX_IMPORT_BYTES": "536870913", "MAX_IMPORT_FILES": "10001"} {
-		_, err := Load(func(name string) string {
+		_, err := runtimeconfig.Load(func(name string) string {
 			if name == key {
 				return value
 			}
@@ -63,7 +64,7 @@ func TestLoadRejectsUnboundedUploadSettings(t *testing.T) {
 }
 
 func TestLoadKeepsExplicitDatabaseAndDerivesSecureCookies(t *testing.T) {
-	config, err := Load(func(key string) string {
+	config, err := runtimeconfig.Load(func(key string) string {
 		switch key {
 		case "DATABASE_URL":
 			return "postgres://cotests:secret@db.example/cotests"
@@ -88,7 +89,7 @@ func TestLoadKeepsExplicitDatabaseAndDerivesSecureCookies(t *testing.T) {
 func TestLoadRejectsInvalidPublicURL(t *testing.T) {
 	for _, value := range []string{"/cotests", "ftp://cotests.example", "https://cotests.example/app", "https://user@cotests.example", "https://cotests.example/?x=1"} {
 		t.Run(value, func(t *testing.T) {
-			_, err := Load(func(key string) string {
+			_, err := runtimeconfig.Load(func(key string) string {
 				if key == "PUBLIC_URL" {
 					return value
 				}
@@ -103,7 +104,7 @@ func TestLoadRejectsInvalidPublicURL(t *testing.T) {
 
 func TestEnsureDataDir(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state", "data")
-	if err := EnsureDataDir(path); err != nil {
+	if err := runtimeconfig.EnsureDataDir(path); err != nil {
 		t.Fatal(err)
 	}
 }

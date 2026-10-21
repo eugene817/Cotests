@@ -62,12 +62,13 @@ go vet ./...
 go build -o cotests .
 ```
 
-To run the opt-in PostgreSQL integration test, provide a disposable PostgreSQL
-database URL with permission to create schemas. The test creates and drops a
-random `cotests_test_*` schema only.
+For PostgreSQL integration checks, provide a disposable database with permission
+to create schemas. Tests create and drop only random `cotests_test_*` schemas.
+CI provisions PostgreSQL 17; the full race suite has also passed locally against
+PostgreSQL 17 through OrbStack's Docker-compatible API.
 
 ```bash
-COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go test ./internal/db -run TestPostgresMigrations
+COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go test -race ./...
 ```
 
 ## Stack
@@ -97,20 +98,30 @@ embedded templates are excluded from public asset delivery.
 
 Visual design follows *The Digital Atelier* system. Tokens are defined in `static/css/style.css`.
 
-## Roadmap
+## Code structure and access rules
 
-Backend delivery is split into two changesets: **MR 1 (B0–B4)** implements the
-content/access/file backend; **MR 2 (B5–B8)** will add saved submissions, account
-lifecycle, clarifications and operational release checks. See
-[BACKEND_MR1.md](BACKEND_MR1.md). Frontend completion is tracked separately.
+- `main.go`: configuration, dependency wiring, embedded UI and admin CLI.
+- `internal/server`: HTML/HTMX and JSON handlers, sessions and request middleware.
+- `internal/content`: scoped permissions, schedules and file/import transactions.
+- `internal/db`: GORM models, queries and ordered, immutable migrations.
+- `internal/artifact` / `internal/importer`: private files and bounded test ZIPs.
+- `internal/auth`, `internal/config`, `internal/judge`: credentials, runtime
+  configuration and the provisional judge interface/Noop.
+- `static`: embedded templates and assets; only CSS/JS are publicly served.
 
-Current product phase: M1, partially complete. M2 will save submissions with the judge
-disabled; M3 is the web MVP for authoring and submission collection. Full
-replacement needs M4 web/content parity plus the deferred professor-led judge
-work (J). See [MVP.md](MVP.md), [JUDGE.md](JUDGE.md), and
-[FEATURE_PARITY.md](FEATURE_PARITY.md) for the scope and acceptance criteria.
+Admins manage all contests and grant organizer roles. Organizers manage assigned
+contests and their own problem libraries; participants read released content in
+contests they belong to. Public schedules do not expose unreleased statements.
+File downloads repeat the same resource checks. Statement release is separate
+from submission eligibility; submission windows use UTC half-open intervals.
 
-See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria,
-[ARCHITECTURE.md](ARCHITECTURE.md) for the proposed stack and domain design,
-[AUTH.md](AUTH.md) for account policies, and [CODE_REVIEW.md](CODE_REVIEW.md)
-for verified findings and differences from the original ZawodyWeb.
+Published revisions and file bytes are immutable. Editing creates a new draft;
+assignments pin a published revision. Future submissions must retain that revision
+and ownership, and prevent destructive cascades. Add schema changes as new
+migrations, preserving existing data. Backups must include both DB and artifacts.
+
+## Project documents
+
+- [ROADMAP.md](ROADMAP.md): remaining backend work, release checks and legacy/judge scope.
+- [HTTP_API.md](HTTP_API.md): implemented routes, payloads, permissions and limits.
+- [FRONTEND_TODO.md](FRONTEND_TODO.md): UI backlog and browser walkthrough checklist.

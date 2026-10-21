@@ -9,7 +9,7 @@ walkthrough and UX review are still pending. Refine this list after reviewing
 the application in a browser.
 
 Backend contracts: [HTTP_API.md](HTTP_API.md).
-Backend scope: [BACKEND_MR1.md](BACKEND_MR1.md).
+Backend status and remaining scope: [ROADMAP.md](ROADMAP.md).
 
 ## Current State
 

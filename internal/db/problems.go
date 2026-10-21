@@ -2,18 +2,25 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
+var ErrNotDraft = errors.New("only a draft revision can be edited")
+
+type ValidationError struct{ Message string }
+
+func (e ValidationError) Error() string { return e.Message }
+
 func CreateProblem(database *gorm.DB, problem *Problem, revision *ProblemRevision) error {
 	if err := validateProblem(problem); err != nil {
-		return ValidationError{err.Error()}
+		return err
 	}
 	if err := validateRevision(revision); err != nil {
-		return ValidationError{err.Error()}
+		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(problem).Error; err != nil {
@@ -63,24 +70,17 @@ func UpdateDraftRevision(database *gorm.DB, revision *ProblemRevision) error {
 		return ErrNotDraft
 	}
 	if err := validateRevision(revision); err != nil {
-		return ValidationError{err.Error()}
+		return err
 	}
 	return database.Transaction(func(tx *gorm.DB) error {
 		if err := LockDraft(tx, revision.ID); err != nil {
 			return err
 		}
-		result := tx.Model(&ProblemRevision{}).Where("id = ? AND state = ?", revision.ID, RevisionDraft).Updates(map[string]any{
+		return tx.Model(&ProblemRevision{}).Where("id = ?", revision.ID).Updates(map[string]any{
 			"statement": revision.Statement, "pdf_artifact_id": revision.PDFArtifactID,
 			"time_limit_millis": revision.TimeLimitMillis, "memory_limit_kib": revision.MemoryLimitKiB,
 			"language_metadata": revision.LanguageMetadata, "checker_metadata": revision.CheckerMetadata,
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return ErrNotDraft
-		}
-		return nil
+		}).Error
 	})
 }
 
@@ -94,21 +94,14 @@ func PublishRevision(database *gorm.DB, revisionID uint, now time.Time) error {
 			return err
 		}
 		if err := validateRevision(revision); err != nil {
-			return ValidationError{err.Error()}
+			return err
 		}
 		if revision.Statement == "" && revision.PDFArtifactID == nil {
 			return ValidationError{"statement or PDF is required for publication"}
 		}
-		result := tx.Model(&ProblemRevision{}).Where("id = ? AND state = ?", revisionID, RevisionDraft).Updates(map[string]any{
+		return tx.Model(&ProblemRevision{}).Where("id = ?", revisionID).Updates(map[string]any{
 			"state": RevisionPublished, "published_at": now.UTC(),
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return ErrNotDraft
-		}
-		return nil
+		}).Error
 	})
 }
 
@@ -229,5 +222,3 @@ func validateRevision(revision *ProblemRevision) error {
 	}
 	return nil
 }
-
-func IsNotFound(err error) bool { return err != nil && (err == gorm.ErrRecordNotFound) }

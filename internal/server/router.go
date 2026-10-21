@@ -45,14 +45,12 @@ func NewRouter(database *gorm.DB, staticHandler http.Handler, tpl Template, conf
 	}
 	service := &content.Service{DB: database, Store: artifact.Store{Root: config.ArtifactDir, MaxBytes: config.MaxArtifactBytes, MaxTotalBytes: config.MaxStorageBytes}, ImportLimits: importer.Limits{MaxBytes: config.MaxImportBytes, MaxFiles: config.MaxImportFiles}}
 	h := &Handler{
-		DB:               database,
-		Tpl:              tpl,
-		SecureCookies:    config.SecureCookies,
-		ArtifactDir:      config.ArtifactDir,
-		MaxArtifactBytes: config.MaxArtifactBytes,
-		Content:          service,
-		CSRFKey:          key,
-		authWork:         make(chan struct{}, 4),
+		DB:            database,
+		Tpl:           tpl,
+		SecureCookies: config.SecureCookies,
+		Content:       service,
+		CSRFKey:       key,
+		authWork:      make(chan struct{}, 4),
 	}
 
 	r := chi.NewRouter()

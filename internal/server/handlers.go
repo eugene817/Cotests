@@ -20,16 +20,14 @@ import (
 )
 
 type Handler struct {
-	DB               *gorm.DB
-	Tpl              Template
-	SecureCookies    bool
-	ArtifactDir      string
-	MaxArtifactBytes int64
-	Content          *content.Service
-	CSRFKey          []byte
-	authWork         chan struct{}
-	authAttempts     map[string]authAttempt
-	authAttemptsMu   sync.Mutex
+	DB             *gorm.DB
+	Tpl            Template
+	SecureCookies  bool
+	Content        *content.Service
+	CSRFKey        []byte
+	authWork       chan struct{}
+	authAttempts   map[string]authAttempt
+	authAttemptsMu sync.Mutex
 }
 
 type Template interface {
@@ -91,7 +89,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		h.renderAuthError(w, r, "register", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-	email, password, name, err := readAuthForm(w, r)
+	email, password, name, err := readAuthForm(r)
 	if err != nil {
 		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
 		return
@@ -100,11 +98,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		h.renderAuthError(w, r, "register", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAuthError(w, r, "register", "Your form has expired. Please try again.", http.StatusForbidden)
-		return
-	}
-
 	if err := validateCredentials(email, password); err != nil {
 		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
 		return
@@ -140,7 +133,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.renderAuthError(w, r, "login", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-	email, password, _, err := readAuthForm(w, r)
+	email, password, _, err := readAuthForm(r)
 	if err != nil {
 		h.renderAuthError(w, r, "login", err.Error(), http.StatusBadRequest)
 		return
@@ -149,11 +142,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.renderAuthError(w, r, "login", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAuthError(w, r, "login", "Your form has expired. Please try again.", http.StatusForbidden)
-		return
-	}
-
 	if err := validateCredentials(email, password); err != nil {
 		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusBadRequest)
 		return
@@ -181,10 +169,6 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	if !h.validCSRFToken(r) {
-		renderAccessError(w, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
 	cookie, err := r.Cookie("session_token")
 	if err == nil {
 		session, err := db.GetSessionByToken(h.DB.WithContext(r.Context()), cookie.Value)
@@ -276,12 +260,7 @@ func (h *Handler) withCSRFToken(w http.ResponseWriter, r *http.Request, data Pag
 	return data
 }
 
-func (h *Handler) validCSRFToken(r *http.Request) bool {
-	return validRequestCSRF(r)
-}
-
-func readAuthForm(w http.ResponseWriter, r *http.Request) (email, password, name string, err error) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+func readAuthForm(r *http.Request) (email, password, name string, err error) {
 	if err := r.ParseForm(); err != nil {
 		return "", "", "", fmt.Errorf("invalid form submission")
 	}

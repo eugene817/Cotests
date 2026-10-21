@@ -117,6 +117,16 @@ func pagination(r *http.Request, database *gorm.DB) (*gorm.DB, error) {
 	return database.Limit(limit).Offset(offset), nil
 }
 
+func apiList[T any](r *http.Request, query *gorm.DB, order string) (any, error) {
+	query, err := pagination(r, query)
+	if err != nil {
+		return nil, err
+	}
+	items := []T{}
+	err = query.Order(order).Find(&items).Error
+	return items, err
+}
+
 func (a *apiHandler) routes(r chi.Router) {
 	r.Get("/csrf", endpoint(func(w http.ResponseWriter, r *http.Request) (any, error) {
 		data := a.pages.withCSRFToken(w, r, PageData{})
@@ -209,13 +219,7 @@ func (a *apiHandler) contests(w http.ResponseWriter, r *http.Request) (any, erro
 			query = query.Where("visibility = ? OR id IN (SELECT contest_id FROM contest_memberships WHERE user_id = ? AND role = ?)", db.ContestPublished, actor.ID, "organizer")
 		}
 	}
-	query, err := pagination(r, query)
-	if err != nil {
-		return nil, err
-	}
-	items := []db.Contest{}
-	err = query.Order("id DESC").Find(&items).Error
-	return items, err
+	return apiList[db.Contest](r, query, "id DESC")
 }
 func (a *apiHandler) createContest(w http.ResponseWriter, r *http.Request) (any, error) {
 	if err := apiAdmin(r); err != nil {
@@ -226,9 +230,6 @@ func (a *apiHandler) createContest(w http.ResponseWriter, r *http.Request) (any,
 		return nil, err
 	}
 	item := input.model()
-	if len(item.Title) > 300 || len(item.Description) > 100000 {
-		return nil, content.ValidationError{Message: "Contest fields too large"}
-	}
 	return item, db.CreateContest(a.database(r), item)
 }
 func (a *apiHandler) contest(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -258,9 +259,6 @@ func (a *apiHandler) updateContest(w http.ResponseWriter, r *http.Request) (any,
 	}
 	item := input.model()
 	item.ID = id
-	if len(item.Title) > 300 || len(item.Description) > 100000 {
-		return nil, content.ValidationError{Message: "Contest fields too large"}
-	}
 	return item, db.UpdateContest(a.database(r), item)
 }
 func (a *apiHandler) deleteContest(w http.ResponseWriter, r *http.Request) (any, error) {
@@ -278,13 +276,7 @@ func (a *apiHandler) members(w http.ResponseWriter, r *http.Request) (any, error
 	if err != nil {
 		return nil, err
 	}
-	q, err := pagination(r, a.database(r).Where("contest_id = ?", id))
-	if err != nil {
-		return nil, err
-	}
-	items := []db.ContestMembership{}
-	err = q.Order("id").Find(&items).Error
-	return items, err
+	return apiList[db.ContestMembership](r, a.database(r).Where("contest_id = ?", id), "id")
 }
 func (a *apiHandler) setMember(w http.ResponseWriter, r *http.Request) (any, error) {
 	id, err := apiID(r, "id")
@@ -316,13 +308,7 @@ func (a *apiHandler) listSeries(w http.ResponseWriter, r *http.Request) (any, er
 		return nil, err
 	}
 	id, _ := apiID(r, "id")
-	q, err := pagination(r, a.database(r).Where("contest_id = ?", id))
-	if err != nil {
-		return nil, err
-	}
-	items := []db.Series{}
-	err = q.Order("position").Find(&items).Error
-	return items, err
+	return apiList[db.Series](r, a.database(r).Where("contest_id = ?", id), "position")
 }
 func (a *apiHandler) saveSeries(w http.ResponseWriter, r *http.Request) (any, error) {
 	id, err := apiID(r, "id")
@@ -394,13 +380,7 @@ func (a *apiHandler) assignments(w http.ResponseWriter, r *http.Request) (any, e
 	if err := a.service.CanReadSeries(r.Context(), UserFromContext(r.Context()), series); err != nil {
 		return nil, err
 	}
-	q, err := pagination(r, a.database(r).Where("series_id = ?", id))
-	if err != nil {
-		return nil, err
-	}
-	items := []db.SeriesProblem{}
-	err = q.Order("position").Find(&items).Error
-	return items, err
+	return apiList[db.SeriesProblem](r, a.database(r).Where("series_id = ?", id), "position")
 }
 func (a *apiHandler) assign(w http.ResponseWriter, r *http.Request) (any, error) {
 	id, err := apiID(r, "id")
@@ -449,13 +429,7 @@ func (a *apiHandler) problems(w http.ResponseWriter, r *http.Request) (any, erro
 	if actor.Role != db.RoleAdmin {
 		q = q.Where("owner_id = ?", actor.ID)
 	}
-	q, err := pagination(r, q)
-	if err != nil {
-		return nil, err
-	}
-	items := []db.Problem{}
-	err = q.Order("id DESC").Find(&items).Error
-	return items, err
+	return apiList[db.Problem](r, q, "id DESC")
 }
 
 type problemInput struct {
@@ -522,13 +496,7 @@ func (a *apiHandler) revisions(w http.ResponseWriter, r *http.Request) (any, err
 		return nil, err
 	}
 	id, _ := apiID(r, "id")
-	q, err := pagination(r, a.database(r).Where("problem_id = ?", id))
-	if err != nil {
-		return nil, err
-	}
-	items := []db.ProblemRevision{}
-	err = q.Order("number DESC").Find(&items).Error
-	return items, err
+	return apiList[db.ProblemRevision](r, a.database(r).Where("problem_id = ?", id), "number DESC")
 }
 func (a *apiHandler) newRevision(w http.ResponseWriter, r *http.Request) (any, error) {
 	if _, err := a.problem(w, r); err != nil {
@@ -590,13 +558,7 @@ func (a *apiHandler) tests(w http.ResponseWriter, r *http.Request) (any, error) 
 		return nil, err
 	}
 	id, _ := apiID(r, "id")
-	q, err := pagination(r, a.database(r).Where("problem_revision_id = ?", id))
-	if err != nil {
-		return nil, err
-	}
-	items := []db.TestCase{}
-	err = q.Order("position").Find(&items).Error
-	return items, err
+	return apiList[db.TestCase](r, a.database(r).Where("problem_revision_id = ?", id), "position")
 }
 func (a *apiHandler) saveTest(w http.ResponseWriter, r *http.Request) (any, error) {
 	id, err := apiID(r, "id")

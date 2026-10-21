@@ -108,7 +108,15 @@ func (s *Service) CanAuthor(ctx context.Context, actor *db.User) error {
 	return nil
 }
 
-func (s *Service) SetMember(ctx context.Context, actor *db.User, contestID, userID uint, role string, remove bool) error {
+func (s *Service) SetMember(ctx context.Context, actor *db.User, contestID, userID uint, role string) error {
+	return s.setMember(ctx, actor, contestID, userID, role, false)
+}
+
+func (s *Service) RemoveMember(ctx context.Context, actor *db.User, contestID, userID uint) error {
+	return s.setMember(ctx, actor, contestID, userID, "", true)
+}
+
+func (s *Service) setMember(ctx context.Context, actor *db.User, contestID, userID uint, role string, remove bool) error {
 	if err := s.ManageContest(ctx, actor, contestID); err != nil {
 		return err
 	}
@@ -155,18 +163,11 @@ func (s *Service) SaveSeries(ctx context.Context, actor *db.User, series *db.Ser
 	if err := s.ManageContest(ctx, actor, series.ContestID); err != nil {
 		return err
 	}
-	series.Title = strings.TrimSpace(series.Title)
-	if series.Title == "" || len(series.Title) > 300 || series.Position < 0 {
-		return invalid("invalid series title or position")
-	}
-	if series.StartAt != nil && series.EndAt != nil && !series.EndAt.After(*series.StartAt) {
-		return invalid("end must be after start")
-	}
 	database := s.database(ctx)
 	if series.ID == 0 {
-		return database.Omit("Contest").Create(series).Error
+		return db.CreateSeries(database, series)
 	}
-	return database.Model(&db.Series{}).Where("id = ? AND contest_id = ?", series.ID, series.ContestID).Updates(map[string]any{"title": series.Title, "position": series.Position, "start_at": series.StartAt, "end_at": series.EndAt, "release_at": series.ReleaseAt}).Error
+	return db.UpdateSeries(database, series)
 }
 
 func (s *Service) CanReadSeries(ctx context.Context, actor *db.User, series *db.Series) error {
@@ -260,25 +261,24 @@ func (s *Service) Assign(ctx context.Context, actor *db.User, assignment *db.Ser
 	return s.database(ctx).Omit("Series", "Problem", "PublishedRevision").Create(assignment).Error
 }
 
-// Reorder requires the complete set and uses a disjoint positive range, retaining
-// non-negative check constraints and uniqueness on both supported databases.
-func (s *Service) Reorder(ctx context.Context, actor *db.User, parent uint, ids []uint, problems bool) error {
-	if problems {
-		if _, err := s.Series(ctx, actor, parent); err != nil {
-			return err
-		}
-	} else if err := s.ManageContest(ctx, actor, parent); err != nil {
+func (s *Service) ReorderSeries(ctx context.Context, actor *db.User, contestID uint, ids []uint) error {
+	if err := s.ManageContest(ctx, actor, contestID); err != nil {
 		return err
 	}
+	return s.reorder(ctx, contestID, ids, &db.Series{}, &db.Contest{}, "contest_id")
+}
+
+func (s *Service) ReorderProblems(ctx context.Context, actor *db.User, seriesID uint, ids []uint) error {
+	if _, err := s.Series(ctx, actor, seriesID); err != nil {
+		return err
+	}
+	return s.reorder(ctx, seriesID, ids, &db.SeriesProblem{}, &db.Series{}, "series_id")
+}
+
+// reorder requires the complete set and uses a disjoint positive range, retaining
+// non-negative check constraints and uniqueness on both supported databases.
+func (s *Service) reorder(ctx context.Context, parent uint, ids []uint, model, parentModel any, column string) error {
 	return s.database(ctx).Transaction(func(tx *gorm.DB) error {
-		var model any = &db.Series{}
-		column := "contest_id"
-		var parentModel any = &db.Contest{}
-		if problems {
-			model = &db.SeriesProblem{}
-			column = "series_id"
-			parentModel = &db.Series{}
-		}
 		if err := tx.Model(parentModel).Where("id = ?", parent).UpdateColumn("id", parent).Error; err != nil {
 			return err
 		}

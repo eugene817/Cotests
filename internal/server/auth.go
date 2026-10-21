@@ -119,8 +119,5 @@ func generateCSRFToken() (string, error) {
 }
 
 func constantTimeEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }

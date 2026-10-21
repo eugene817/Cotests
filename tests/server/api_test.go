@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"cotests/internal/db"
 	"cotests/tests/internal/testutil"
@@ -141,6 +142,57 @@ func TestContentAPIEndToEnd(t *testing.T) {
 	xc.request("POST", sp+"/problems", fmt.Sprintf(`{"revision_id":%d,"code":"B","position":1}`, created.Revision.ID), 403)
 	oc.request("GET", "/api/v1/problems?limit=0", "", 400)
 	oc.request("POST", "/api/v1/problems", `{"title":"x","code":"x","extra":true}`, 400)
+}
+
+func TestSeriesValidationIsSharedByHTMLAndAPI(t *testing.T) {
+	router, database := newTestRouter(t)
+	admin := testutil.CreateAdmin(t, database, "series@api.test")
+	token := testutil.CreateSession(t, database, admin.ID)
+	client := newAPIClient(t, router, token)
+	contest := &db.Contest{Title: "Contest"}
+	if err := db.CreateContest(database, contest); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	series := &db.Series{ContestID: contest.ID, Title: "Round", StartAt: &start, EndAt: &end, ReleaseAt: &start}
+	if err := db.CreateSeries(database, series); err != nil {
+		t.Fatal(err)
+	}
+	createPath := fmt.Sprintf("/admin/contests/%d/series", contest.ID)
+	updatePath := fmt.Sprintf("%s/%d", createPath, series.ID)
+	apiCreatePath := fmt.Sprintf("/api/v1/contests/%d/series", contest.ID)
+	apiUpdatePath := fmt.Sprintf("/api/v1/series/%d", series.ID)
+	postForm := func(path string, form url.Values, want int) {
+		t.Helper()
+		form.Set("csrf_token", client.csrf.Value)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, formRequest(http.MethodPost, path, form, client.session, client.csrf))
+		if response.Code != want {
+			t.Fatalf("POST %s: %d want %d: %s", path, response.Code, want, response.Body)
+		}
+	}
+	for _, title := range []string{" ", strings.Repeat("x", 301)} {
+		body, err := json.Marshal(map[string]any{"title": title, "position": 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.request(http.MethodPost, apiCreatePath, string(body), http.StatusBadRequest)
+		client.request(http.MethodPut, apiUpdatePath, string(body), http.StatusBadRequest)
+		for _, path := range []string{createPath, updatePath} {
+			postForm(path, url.Values{"title": {title}, "position": {"1"}}, http.StatusBadRequest)
+		}
+	}
+	client.request(http.MethodPut, apiUpdatePath,
+		`{"title":"Round","position":0,"start_at":"2026-10-21T13:00:00Z","end_at":"2026-10-21T12:00:00Z"}`, http.StatusBadRequest)
+	postForm(updatePath, url.Values{"title": {"Renamed"}, "position": {"0"}}, http.StatusSeeOther)
+	loaded, err := db.GetSeries(database, series.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Title != "Renamed" || loaded.StartAt == nil || !loaded.StartAt.Equal(start) || loaded.EndAt == nil || !loaded.EndAt.Equal(end) || loaded.ReleaseAt == nil || !loaded.ReleaseAt.Equal(start) {
+		t.Fatalf("HTML update changed the schedule: %#v", loaded)
+	}
 }
 
 func TestZIPPreviewCommitAPI(t *testing.T) {

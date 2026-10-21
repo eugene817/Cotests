@@ -124,7 +124,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	series.ContestID = contest.ID
-	if err := db.CreateSeries(h.DB.WithContext(r.Context()), series); err != nil {
+	if err := h.Content.SaveSeries(r.Context(), UserFromContext(r.Context()), series); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -142,7 +142,10 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.ID = series.ID
-	if err := db.UpdateSeries(h.DB.WithContext(r.Context()), input); err != nil {
+	input.ContestID = series.ContestID
+	// The HTML form edits title and position only; preserve the schedule.
+	input.StartAt, input.EndAt, input.ReleaseAt = series.StartAt, series.EndAt, series.ReleaseAt
+	if err := h.Content.SaveSeries(r.Context(), UserFromContext(r.Context()), input); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -214,9 +217,13 @@ func (h *Handler) adminSeries(w http.ResponseWriter, r *http.Request) (*db.Serie
 }
 
 func routeID(r *http.Request, key string) (uint, error) {
-	id, err := strconv.ParseUint(chi.URLParam(r, key), 10, 64)
+	return parseID(chi.URLParam(r, key))
+}
+
+func parseID(raw string) (uint, error) {
+	id, err := strconv.ParseUint(raw, 10, strconv.IntSize)
 	if err != nil || id == 0 {
-		return 0, fmt.Errorf("invalid %s", key)
+		return 0, gorm.ErrRecordNotFound
 	}
 	return uint(id), nil
 }

@@ -92,14 +92,6 @@ func decodeJSON(r *http.Request, value any) error {
 	return nil
 }
 
-func apiID(r *http.Request, name string) (uint, error) {
-	id, err := strconv.ParseUint(chi.URLParam(r, name), 10, 32)
-	if err != nil || id == 0 {
-		return 0, gorm.ErrRecordNotFound
-	}
-	return uint(id), nil
-}
-
 func pagination(r *http.Request, database *gorm.DB) (*gorm.DB, error) {
 	limit, offset := 50, 0
 	for key, dest := range map[string]*int{"limit": &limit, "offset": &offset} {
@@ -166,7 +158,7 @@ func (a *apiHandler) routes(r chi.Router) {
 	r.Post("/revisions/{id}/imports", endpoint(a.previewZIP))
 	r.Post("/revisions/{id}/imports/{previewID}/commit", endpoint(a.commitZIP))
 	r.Get("/assignments/{id}", endpoint(func(w http.ResponseWriter, r *http.Request) (any, error) {
-		id, err := apiID(r, "id")
+		id, err := routeID(r, "id")
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +173,7 @@ func (a *apiHandler) routes(r chi.Router) {
 
 func (a *apiHandler) database(r *http.Request) *gorm.DB { return a.service.DB.WithContext(r.Context()) }
 func (a *apiHandler) manager(r *http.Request) (uint, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return 0, err
 	}
@@ -233,7 +225,11 @@ func (a *apiHandler) createContest(w http.ResponseWriter, r *http.Request) (any,
 	return item, db.CreateContest(a.database(r), item)
 }
 func (a *apiHandler) contest(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	return a.loadContest(r)
+}
+
+func (a *apiHandler) loadContest(r *http.Request) (*db.Contest, error) {
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +261,7 @@ func (a *apiHandler) deleteContest(w http.ResponseWriter, r *http.Request) (any,
 	if err := apiAdmin(r); err != nil {
 		return nil, err
 	}
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +275,7 @@ func (a *apiHandler) members(w http.ResponseWriter, r *http.Request) (any, error
 	return apiList[db.ContestMembership](r, a.database(r).Where("contest_id = ?", id), "id")
 }
 func (a *apiHandler) setMember(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -290,28 +286,28 @@ func (a *apiHandler) setMember(w http.ResponseWriter, r *http.Request) (any, err
 	if err := decodeJSON(r, &input); err != nil {
 		return nil, err
 	}
-	return nil, a.service.SetMember(r.Context(), UserFromContext(r.Context()), id, input.UserID, input.Role, false)
+	return nil, a.service.SetMember(r.Context(), UserFromContext(r.Context()), id, input.UserID, input.Role)
 }
 func (a *apiHandler) deleteMember(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
-	uid, err := apiID(r, "userID")
+	uid, err := routeID(r, "userID")
 	if err != nil {
 		return nil, err
 	}
-	return nil, a.service.SetMember(r.Context(), UserFromContext(r.Context()), id, uid, "", true)
+	return nil, a.service.RemoveMember(r.Context(), UserFromContext(r.Context()), id, uid)
 }
 func (a *apiHandler) listSeries(w http.ResponseWriter, r *http.Request) (any, error) {
-	if _, err := a.contest(w, r); err != nil {
+	contest, err := a.loadContest(r)
+	if err != nil {
 		return nil, err
 	}
-	id, _ := apiID(r, "id")
-	return apiList[db.Series](r, a.database(r).Where("contest_id = ?", id), "position")
+	return apiList[db.Series](r, a.database(r).Where("contest_id = ?", contest.ID), "position")
 }
 func (a *apiHandler) saveSeries(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +336,7 @@ func (a *apiHandler) saveSeries(w http.ResponseWriter, r *http.Request) (any, er
 	return item, a.service.SaveSeries(r.Context(), UserFromContext(r.Context()), item)
 }
 func (a *apiHandler) deleteSeries(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -349,27 +345,35 @@ func (a *apiHandler) deleteSeries(w http.ResponseWriter, r *http.Request) (any, 
 	}
 	return nil, db.DeleteSeries(a.database(r), id)
 }
-func (a *apiHandler) order(r *http.Request, problems bool) error {
-	id, err := apiID(r, "id")
+func readOrder(r *http.Request) (uint, []uint, error) {
+	id, err := routeID(r, "id")
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	var input struct {
 		IDs []uint `json:"ids"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
-		return err
+		return 0, nil, err
 	}
-	return a.service.Reorder(r.Context(), UserFromContext(r.Context()), id, input.IDs, problems)
+	return id, input.IDs, nil
 }
 func (a *apiHandler) orderSeries(w http.ResponseWriter, r *http.Request) (any, error) {
-	return nil, a.order(r, false)
+	id, ids, err := readOrder(r)
+	if err != nil {
+		return nil, err
+	}
+	return nil, a.service.ReorderSeries(r.Context(), UserFromContext(r.Context()), id, ids)
 }
 func (a *apiHandler) orderProblems(w http.ResponseWriter, r *http.Request) (any, error) {
-	return nil, a.order(r, true)
+	id, ids, err := readOrder(r)
+	if err != nil {
+		return nil, err
+	}
+	return nil, a.service.ReorderProblems(r.Context(), UserFromContext(r.Context()), id, ids)
 }
 func (a *apiHandler) assignments(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +387,7 @@ func (a *apiHandler) assignments(w http.ResponseWriter, r *http.Request) (any, e
 	return apiList[db.SeriesProblem](r, a.database(r).Where("series_id = ?", id), "position")
 }
 func (a *apiHandler) assign(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -399,14 +403,14 @@ func (a *apiHandler) assign(w http.ResponseWriter, r *http.Request) (any, error)
 	return item, a.service.Assign(r.Context(), UserFromContext(r.Context()), item)
 }
 func (a *apiHandler) unassign(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
 	if _, err := a.service.Series(r.Context(), UserFromContext(r.Context()), id); err != nil {
 		return nil, err
 	}
-	aid, err := apiID(r, "assignmentID")
+	aid, err := routeID(r, "assignmentID")
 	if err != nil {
 		return nil, err
 	}
@@ -462,18 +466,21 @@ func (a *apiHandler) createProblem(w http.ResponseWriter, r *http.Request) (any,
 	return map[string]any{"problem": problem, "revision": revision}, nil
 }
 func (a *apiHandler) problem(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	return a.loadProblem(r)
+}
+
+func (a *apiHandler) loadProblem(r *http.Request) (*db.Problem, error) {
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
 	return a.service.ManageProblem(r.Context(), UserFromContext(r.Context()), id)
 }
 func (a *apiHandler) updateProblem(w http.ResponseWriter, r *http.Request) (any, error) {
-	value, err := a.problem(w, r)
+	item, err := a.loadProblem(r)
 	if err != nil {
 		return nil, err
 	}
-	item := value.(*db.Problem)
 	var input struct {
 		Title string `json:"title"`
 		Code  string `json:"code"`
@@ -492,32 +499,35 @@ func (a *apiHandler) updateProblem(w http.ResponseWriter, r *http.Request) (any,
 	return item, err
 }
 func (a *apiHandler) revisions(w http.ResponseWriter, r *http.Request) (any, error) {
-	if _, err := a.problem(w, r); err != nil {
+	problem, err := a.loadProblem(r)
+	if err != nil {
 		return nil, err
 	}
-	id, _ := apiID(r, "id")
-	return apiList[db.ProblemRevision](r, a.database(r).Where("problem_id = ?", id), "number DESC")
+	return apiList[db.ProblemRevision](r, a.database(r).Where("problem_id = ?", problem.ID), "number DESC")
 }
 func (a *apiHandler) newRevision(w http.ResponseWriter, r *http.Request) (any, error) {
-	if _, err := a.problem(w, r); err != nil {
+	problem, err := a.loadProblem(r)
+	if err != nil {
 		return nil, err
 	}
-	id, _ := apiID(r, "id")
-	return db.CreateDraftRevision(a.database(r), id)
+	return db.CreateDraftRevision(a.database(r), problem.ID)
 }
 func (a *apiHandler) revision(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	return a.loadRevision(r)
+}
+
+func (a *apiHandler) loadRevision(r *http.Request) (*db.ProblemRevision, error) {
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
 	return a.service.Revision(r.Context(), UserFromContext(r.Context()), id)
 }
 func (a *apiHandler) updateRevision(w http.ResponseWriter, r *http.Request) (any, error) {
-	value, err := a.revision(w, r)
+	item, err := a.loadRevision(r)
 	if err != nil {
 		return nil, err
 	}
-	item := value.(*db.ProblemRevision)
 	if item.State != db.RevisionDraft {
 		return nil, content.ErrConflict
 	}
@@ -543,31 +553,30 @@ func (a *apiHandler) updateRevision(w http.ResponseWriter, r *http.Request) (any
 	return item, db.UpdateDraftRevision(a.database(r), item)
 }
 func (a *apiHandler) publish(w http.ResponseWriter, r *http.Request) (any, error) {
-	value, err := a.revision(w, r)
+	item, err := a.loadRevision(r)
 	if err != nil {
 		return nil, err
 	}
-	item := value.(*db.ProblemRevision)
 	if item.State != db.RevisionDraft {
 		return nil, content.ErrConflict
 	}
 	return nil, db.PublishRevision(a.database(r), item.ID, time.Now())
 }
 func (a *apiHandler) tests(w http.ResponseWriter, r *http.Request) (any, error) {
-	if _, err := a.revision(w, r); err != nil {
+	revision, err := a.loadRevision(r)
+	if err != nil {
 		return nil, err
 	}
-	id, _ := apiID(r, "id")
-	return apiList[db.TestCase](r, a.database(r).Where("problem_revision_id = ?", id), "position")
+	return apiList[db.TestCase](r, a.database(r).Where("problem_revision_id = ?", revision.ID), "position")
 }
 func (a *apiHandler) saveTest(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
 	var tid uint
 	if r.Method == http.MethodPut {
-		tid, err = apiID(r, "testID")
+		tid, err = routeID(r, "testID")
 		if err != nil {
 			return nil, err
 		}
@@ -579,11 +588,11 @@ func (a *apiHandler) saveTest(w http.ResponseWriter, r *http.Request) (any, erro
 	return a.service.SaveTest(r.Context(), UserFromContext(r.Context()), id, tid, input)
 }
 func (a *apiHandler) deleteTest(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
-	tid, err := apiID(r, "testID")
+	tid, err := routeID(r, "testID")
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +632,7 @@ func upload(r *http.Request, fn func(io.Reader) (any, error)) (any, error) {
 	return fn(file)
 }
 func (a *apiHandler) uploadPDF(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +644,7 @@ func (a *apiHandler) uploadPDF(w http.ResponseWriter, r *http.Request) (any, err
 	})
 }
 func (a *apiHandler) previewZIP(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
@@ -647,18 +656,18 @@ func (a *apiHandler) previewZIP(w http.ResponseWriter, r *http.Request) (any, er
 	})
 }
 func (a *apiHandler) commitZIP(w http.ResponseWriter, r *http.Request) (any, error) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		return nil, err
 	}
-	pid, err := apiID(r, "previewID")
+	pid, err := routeID(r, "previewID")
 	if err != nil {
 		return nil, err
 	}
 	return nil, a.service.CommitZIP(r.Context(), UserFromContext(r.Context()), id, pid)
 }
 func (a *apiHandler) download(w http.ResponseWriter, r *http.Request) {
-	id, err := apiID(r, "id")
+	id, err := routeID(r, "id")
 	if err != nil {
 		apiError(w, err)
 		return

@@ -11,18 +11,21 @@ import (
 	"strings"
 	"time"
 
+	"cotests/internal/artifact"
 	"cotests/internal/db"
 	"cotests/internal/importer"
 	"gorm.io/gorm"
 )
 
+type saveArtifact func(uint, string, string, io.Reader) (*db.Artifact, error)
+
 // fileTransaction compensates filesystem writes whenever the database transaction
 // fails. A process crash can still leave an orphan; GC handles that after grace.
-func (s *Service) fileTransaction(ctx context.Context, fn func(*gorm.DB, func(uint, string, string, io.Reader) (*db.Artifact, error)) error) error {
+func (s *Service) fileTransaction(ctx context.Context, store artifact.Store, fn func(*gorm.DB, saveArtifact) error) error {
 	var created []*db.Artifact
 	err := s.database(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(tx, func(owner uint, name, kind string, source io.Reader) (*db.Artifact, error) {
-			item, err := s.Store.Save(tx, owner, name, kind, source)
+			item, err := store.Save(tx, owner, name, kind, source)
 			if err == nil {
 				created = append(created, item)
 			}
@@ -31,7 +34,7 @@ func (s *Service) fileTransaction(ctx context.Context, fn func(*gorm.DB, func(ui
 	})
 	if err != nil {
 		for _, item := range created {
-			_ = s.Store.Remove(item.StorageKey)
+			_ = store.Remove(item.StorageKey)
 		}
 	}
 	return err
@@ -54,7 +57,7 @@ func (s *Service) SaveTest(ctx context.Context, actor *db.User, revisionID, test
 		return nil, invalid("invalid test metadata")
 	}
 	result := &db.TestCase{ID: testID, ProblemRevisionID: revisionID, Position: input.Position, IsSample: input.IsSample, Points: input.Points, TimeLimitOverrideMillis: input.TimeLimitOverrideMillis}
-	err := s.fileTransaction(ctx, func(tx *gorm.DB, save func(uint, string, string, io.Reader) (*db.Artifact, error)) error {
+	err := s.fileTransaction(ctx, s.Store, func(tx *gorm.DB, save saveArtifact) error {
 		if err := db.LockDraft(tx, revisionID); err != nil {
 			return conflictDraft(err)
 		}
@@ -110,7 +113,7 @@ func (s *Service) UploadPDF(ctx context.Context, actor *db.User, revisionID uint
 		return nil, invalid("a PDF file is required")
 	}
 	var item *db.Artifact
-	err := s.fileTransaction(ctx, func(tx *gorm.DB, save func(uint, string, string, io.Reader) (*db.Artifact, error)) error {
+	err := s.fileTransaction(ctx, s.Store, func(tx *gorm.DB, save saveArtifact) error {
 		if err := db.LockDraft(tx, revisionID); err != nil {
 			return conflictDraft(err)
 		}
@@ -160,30 +163,21 @@ func (s *Service) PreviewZIP(ctx context.Context, actor *db.User, revisionID uin
 		}
 	}
 	preview := db.ImportPreview{OwnerID: actor.ID, RevisionID: revisionID, ExpiresAt: s.now().Add(time.Hour)}
-	var stored *db.Artifact
-	err = s.fileTransaction(ctx, func(tx *gorm.DB, save func(uint, string, string, io.Reader) (*db.Artifact, error)) error {
+	// ZIP storage uses its own bounded limit, not the individual test limit.
+	store := s.Store
+	store.MaxBytes = s.ImportLimits.MaxBytes
+	err = s.fileTransaction(ctx, store, func(tx *gorm.DB, save saveArtifact) error {
 		if err := db.LockDraft(tx, revisionID); err != nil {
 			return conflictDraft(err)
 		}
-		// ZIP storage uses its own bounded limit, not the individual test limit.
-		store := s.Store
-		store.MaxBytes = s.ImportLimits.MaxBytes
-		item, err := store.Save(tx, actor.ID, "tests.zip", "application/zip", bytes.NewReader(raw))
+		item, err := save(actor.ID, "tests.zip", "application/zip", bytes.NewReader(raw))
 		if err != nil {
 			return err
 		}
 		preview.ArtifactID = item.ID
-		stored = item
-		if err := tx.Omit("Owner", "Revision", "Artifact").Create(&preview).Error; err != nil {
-			_ = store.Remove(item.StorageKey)
-			return err
-		}
-		return nil
+		return tx.Omit("Owner", "Revision", "Artifact").Create(&preview).Error
 	})
 	if err != nil {
-		if stored != nil {
-			_ = s.Store.Remove(stored.StorageKey)
-		}
 		return nil, err
 	}
 	result := &Preview{ID: preview.ID, ExpiresAt: preview.ExpiresAt, Tests: []PreviewTest{}}
@@ -197,7 +191,7 @@ func (s *Service) CommitZIP(ctx context.Context, actor *db.User, revisionID, pre
 	if _, err := s.Revision(ctx, actor, revisionID); err != nil {
 		return err
 	}
-	return s.fileTransaction(ctx, func(tx *gorm.DB, save func(uint, string, string, io.Reader) (*db.Artifact, error)) error {
+	return s.fileTransaction(ctx, s.Store, func(tx *gorm.DB, save saveArtifact) error {
 		if err := db.LockDraft(tx, revisionID); err != nil {
 			return conflictDraft(err)
 		}

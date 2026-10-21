@@ -1,7 +1,9 @@
 package server
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"cotests/internal/content"
 	"cotests/internal/db"
 	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
 )
 
 func (h *Handler) AdminProblems(w http.ResponseWriter, r *http.Request) {
@@ -22,139 +25,151 @@ func (h *Handler) AdminProblems(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateProblem(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, "Invalid form submission.")
+		h.renderAdminError(w, r, http.StatusBadRequest, "Invalid form submission.")
 		return
 	}
 	user := UserFromContext(r.Context())
 	problem := &db.Problem{OwnerID: user.ID, Title: r.Form.Get("title"), Code: r.Form.Get("code")}
 	revision := &db.ProblemRevision{Statement: r.Form.Get("statement"), LanguageMetadata: r.Form.Get("language_metadata"), CheckerMetadata: r.Form.Get("checker_metadata")}
 	if err := db.CreateProblem(h.DB.WithContext(r.Context()), problem, revision); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, err.Error())
+		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d", problem.ID))
 }
 
 func (h *Handler) AdminProblem(w http.ResponseWriter, r *http.Request) {
-	problem, revision, tests, revisions, ok := h.loadAdminProblem(w, r)
-	if !ok {
+	data, err := h.loadProblemPage(r)
+	if err != nil {
+		renderProblemLoadError(w, r, err)
 		return
 	}
-	h.render(w, "layout", h.withCSRFToken(w, r, PageData{Title: problem.Title, User: UserFromContext(r.Context()), Template: "problem_detail", Problem: problem, Revision: revision, Tests: tests, Revisions: revisions}))
+	h.render(w, "layout", h.withCSRFToken(w, r, data))
 }
 
 func (h *Handler) CreateProblemRevision(w http.ResponseWriter, r *http.Request) {
-	problem, _, _, _, ok := h.loadAdminProblem(w, r)
-	if !ok {
+	problemID, err := routeID(r, "problemID")
+	if err != nil {
+		renderProblemLoadError(w, r, err)
 		return
 	}
-	if _, err := db.CreateDraftRevision(h.DB.WithContext(r.Context()), problem.ID); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, err.Error())
+	if _, err := db.CreateDraftRevision(h.DB.WithContext(r.Context()), problemID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d", problem.ID))
+	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d", problemID))
 }
 
 func (h *Handler) UpdateProblemRevision(w http.ResponseWriter, r *http.Request) {
-	problem, revision, _, _, ok := h.loadAdminProblem(w, r)
-	if !ok {
+	revision, err := h.loadProblemRevision(r)
+	if err != nil {
+		renderProblemLoadError(w, r, err)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, "Invalid form submission.")
+		h.renderAdminError(w, r, http.StatusBadRequest, "Invalid form submission.")
 		return
 	}
 	revision.Statement = r.Form.Get("statement")
 	revision.LanguageMetadata = r.Form.Get("language_metadata")
 	revision.CheckerMetadata = r.Form.Get("checker_metadata")
 	if err := db.UpdateDraftRevision(h.DB.WithContext(r.Context()), revision); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, err.Error())
+		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", problem.ID, revision.ID))
+	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", revision.ProblemID, revision.ID))
 }
 
 func (h *Handler) PublishProblemRevision(w http.ResponseWriter, r *http.Request) {
-	problem, revision, _, _, ok := h.loadAdminProblem(w, r)
-	if !ok {
+	revision, err := h.loadProblemRevision(r)
+	if err != nil {
+		renderProblemLoadError(w, r, err)
 		return
 	}
 	if err := db.PublishRevision(h.DB.WithContext(r.Context()), revision.ID, time.Now()); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, err.Error())
+		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", problem.ID, revision.ID))
+	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", revision.ProblemID, revision.ID))
 }
 
 func (h *Handler) CreateProblemTest(w http.ResponseWriter, r *http.Request) {
-	problem, revision, _, _, ok := h.loadAdminProblem(w, r)
-	if !ok {
+	revision, err := h.loadProblemRevision(r)
+	if err != nil {
+		renderProblemLoadError(w, r, err)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, "Invalid form submission.")
+		h.renderAdminError(w, r, http.StatusBadRequest, "Invalid form submission.")
 		return
 	}
 	position, err := strconv.Atoi(r.Form.Get("position"))
 	if err != nil || position < 0 {
-		h.renderProblemError(w, r, http.StatusBadRequest, "Test position must be a non-negative whole number.")
+		h.renderAdminError(w, r, http.StatusBadRequest, "Test position must be a non-negative whole number.")
 		return
 	}
 	user := UserFromContext(r.Context())
 	if _, err := h.Content.SaveTest(r.Context(), user, revision.ID, 0, content.TestInput{Position: position, IsSample: r.Form.Get("is_sample") == "on", Input: r.Form.Get("input"), Output: r.Form.Get("output")}); err != nil {
-		h.renderProblemError(w, r, http.StatusBadRequest, err.Error())
+		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", problem.ID, revision.ID))
+	hxRedirect(w, r, fmt.Sprintf("/admin/problems/%d?revision=%d", revision.ProblemID, revision.ID))
 }
 
-func (h *Handler) loadAdminProblem(w http.ResponseWriter, r *http.Request) (*db.Problem, *db.ProblemRevision, []db.TestCase, []db.ProblemRevision, bool) {
+func (h *Handler) loadProblemRevision(r *http.Request) (*db.ProblemRevision, error) {
 	problemID, err := routeID(r, "problemID")
 	if err != nil {
-		http.NotFound(w, r)
-		return nil, nil, nil, nil, false
+		return nil, err
 	}
-	problem, err := db.GetProblem(h.DB.WithContext(r.Context()), problemID)
-	if err != nil {
-		http.NotFound(w, r)
-		return nil, nil, nil, nil, false
-	}
-	revisions, err := db.ListProblemRevisions(h.DB.WithContext(r.Context()), problem.ID)
-	if err != nil || len(revisions) == 0 {
-		http.Error(w, "Could not load problem revisions.", http.StatusInternalServerError)
-		return nil, nil, nil, nil, false
-	}
-	revision := &revisions[0]
+	query := h.DB.WithContext(r.Context()).Where("problem_id = ?", problemID)
 	raw := chi.URLParam(r, "revisionID")
 	if raw == "" {
 		raw = r.URL.Query().Get("revision")
 	}
 	if raw != "" {
-		id, err := strconv.ParseUint(raw, 10, 64)
+		id, err := parseID(raw)
 		if err != nil {
-			http.NotFound(w, r)
-			return nil, nil, nil, nil, false
+			return nil, err
 		}
-		candidate, err := db.GetProblemRevision(h.DB.WithContext(r.Context()), uint(id))
-		if err != nil || candidate.ProblemID != problem.ID {
-			http.NotFound(w, r)
-			return nil, nil, nil, nil, false
-		}
-		revision = candidate
+		query = query.Where("id = ?", id)
 	}
-	tests, err := db.ListTestCases(h.DB.WithContext(r.Context()), revision.ID)
-	if err != nil {
-		http.Error(w, "Could not load tests.", http.StatusInternalServerError)
-		return nil, nil, nil, nil, false
+	var revision db.ProblemRevision
+	if err := query.Order("number DESC").First(&revision).Error; err != nil {
+		return nil, err
 	}
-	return problem, revision, tests, revisions, true
+	return &revision, nil
 }
 
-func (h *Handler) renderProblemError(w http.ResponseWriter, r *http.Request, status int, message string) {
-	if isHTMX(r) {
-		w.WriteHeader(status)
-		h.render(w, "admin_error", PageData{Error: message})
+func (h *Handler) loadProblemPage(r *http.Request) (PageData, error) {
+	revision, err := h.loadProblemRevision(r)
+	if err != nil {
+		return PageData{}, err
+	}
+	database := h.DB.WithContext(r.Context())
+	problem, err := db.GetProblem(database, revision.ProblemID)
+	if err != nil {
+		return PageData{}, err
+	}
+	revisions, err := db.ListProblemRevisions(database, problem.ID)
+	if err != nil {
+		return PageData{}, err
+	}
+	tests, err := db.ListTestCases(database, revision.ID)
+	if err != nil {
+		return PageData{}, err
+	}
+	return PageData{Title: problem.Title, User: UserFromContext(r.Context()), Template: "problem_detail", Problem: problem, Revision: revision, Tests: tests, Revisions: revisions}, nil
+}
+
+func renderProblemLoadError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		http.NotFound(w, r)
 		return
 	}
-	renderAccessError(w, status, message)
+	log.Printf("load problem: %v", err)
+	http.Error(w, "Could not load problem.", http.StatusInternalServerError)
 }

@@ -48,8 +48,8 @@ func setup(t *testing.T, database *gorm.DB) *fixture {
 	f.contest = &db.Contest{Title: "Contest", Visibility: db.ContestPublished}
 	must(t, db.CreateContest(database, f.contest))
 	ctx := context.Background()
-	must(t, f.s.SetMember(ctx, f.admin, f.contest.ID, f.author.ID, "organizer", false))
-	must(t, f.s.SetMember(ctx, f.author, f.contest.ID, f.participant.ID, "participant", false))
+	must(t, f.s.SetMember(ctx, f.admin, f.contest.ID, f.author.ID, "organizer"))
+	must(t, f.s.SetMember(ctx, f.author, f.contest.ID, f.participant.ID, "participant"))
 	f.series = &db.Series{ContestID: f.contest.ID, Title: "Round", Position: 0}
 	must(t, f.s.SaveSeries(ctx, f.author, f.series))
 	f.problem = &db.Problem{OwnerID: f.author.ID, Title: "Problem", Code: "P"}
@@ -89,7 +89,7 @@ func TestContentDatabaseContract(t *testing.T) {
 				if !errors.Is(f.s.ManageContest(ctx, f.outsider, f.contest.ID), content.ErrForbidden) {
 					t.Fatal("outsider can manage")
 				}
-				if !errors.Is(f.s.SetMember(ctx, f.author, f.contest.ID, f.author.ID, "participant", false), content.ErrForbidden) {
+				if !errors.Is(f.s.SetMember(ctx, f.author, f.contest.ID, f.author.ID, "participant"), content.ErrForbidden) {
 					t.Fatal("organizer can demote organizer")
 				}
 				f.series.ReleaseAt = nil
@@ -143,8 +143,8 @@ func TestContentDatabaseContract(t *testing.T) {
 			t.Run("reorder rollback", func(t *testing.T) {
 				second := &db.Series{ContestID: f.contest.ID, Title: "Second", Position: 1}
 				must(t, f.s.SaveSeries(ctx, f.author, second))
-				must(t, f.s.Reorder(ctx, f.author, f.contest.ID, []uint{second.ID, f.series.ID}, false))
-				if err := f.s.Reorder(ctx, f.author, f.contest.ID, []uint{f.series.ID, f.series.ID}, false); err == nil {
+				must(t, f.s.ReorderSeries(ctx, f.author, f.contest.ID, []uint{second.ID, f.series.ID}))
+				if err := f.s.ReorderSeries(ctx, f.author, f.contest.ID, []uint{f.series.ID, f.series.ID}); err == nil {
 					t.Fatal("duplicate accepted")
 				}
 				rows, err := db.ListSeries(f.s.DB, f.contest.ID)
@@ -215,8 +215,11 @@ func TestFileTransactionsAndImports(t *testing.T) {
 			if count != 0 {
 				t.Fatal("failed save left metadata")
 			}
+			// The archive may exceed the individual artifact limit; each test fits.
+			f.s.Store.MaxBytes = 4
 			preview, err := f.s.PreviewZIP(ctx, f.author, f.revision.ID, bytes.NewReader(zipBytes(t)))
 			must(t, err)
+			f.s.Store.MaxBytes = 4096
 			// Force mid-import quota failure; preview survives, imported tests do not.
 			var record db.ImportPreview
 			must(t, f.s.DB.First(&record, preview.ID).Error)
@@ -295,5 +298,37 @@ func TestCanceledRequestDoesNotWrite(t *testing.T) {
 	_, err := f.s.SaveTest(ctx, f.author, f.revision.ID, 0, content.TestInput{Input: "x", Output: "y"})
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled context: %v", err)
+	}
+}
+
+func TestPreviewZIPRollsBackFilesWhenMetadataFails(t *testing.T) {
+	for name, factory := range map[string]func(*testing.T) *gorm.DB{"sqlite": testutil.NewDatabase, "postgres": testutil.NewPostgresDatabase} {
+		t.Run(name, func(t *testing.T) {
+			f := setup(t, factory(t))
+			failure := errors.New("preview metadata failed")
+			must(t, f.s.DB.Callback().Create().After("gorm:create").Register("test:fail_preview", func(tx *gorm.DB) {
+				if tx.Statement.Table == "import_previews" {
+					tx.AddError(failure)
+				}
+			}))
+			t.Cleanup(func() { _ = f.s.DB.Callback().Create().Remove("test:fail_preview") })
+
+			_, err := f.s.PreviewZIP(context.Background(), f.author, f.revision.ID, bytes.NewReader(zipBytes(t)))
+			if !errors.Is(err, failure) {
+				t.Fatalf("preview error = %v, want metadata failure", err)
+			}
+			entries, err := os.ReadDir(f.s.Store.Root)
+			must(t, err)
+			if len(entries) != 0 {
+				t.Fatalf("failed preview left %d files", len(entries))
+			}
+			for _, model := range []any{&db.Artifact{}, &db.ImportPreview{}} {
+				var count int64
+				must(t, f.s.DB.Model(model).Count(&count).Error)
+				if count != 0 {
+					t.Fatalf("failed preview left metadata for %T", model)
+				}
+			}
+		})
 	}
 }

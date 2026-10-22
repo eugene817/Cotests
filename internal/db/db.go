@@ -15,7 +15,7 @@ import (
 func Open(dsn string) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 
-	if isPostgres(dsn) {
+	if IsPostgres(dsn) {
 		dialector = postgres.Open(dsn)
 	} else {
 		// Apply this on every physical connection, including pool replacements.
@@ -42,7 +42,7 @@ func Open(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("db underlying: %w", err)
 	}
-	if !isPostgres(dsn) {
+	if !IsPostgres(dsn) {
 		// SQLite permits only one writer, so serialise access through one connection.
 		sqlDB.SetMaxOpenConns(1)
 		sqlDB.SetMaxIdleConns(1)
@@ -57,7 +57,8 @@ func Open(dsn string) (*gorm.DB, error) {
 	return db, nil
 }
 
-func isPostgres(dsn string) bool {
+// IsPostgres reports whether a DSN selects the PostgreSQL driver.
+func IsPostgres(dsn string) bool {
 	return strings.HasPrefix(dsn, "postgres://") ||
 		strings.HasPrefix(dsn, "postgresql://") ||
 		strings.HasPrefix(dsn, "host=")

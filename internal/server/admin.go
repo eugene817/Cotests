@@ -16,7 +16,7 @@ import (
 )
 
 func (h *Handler) AdminDashboard(w http.ResponseWriter, r *http.Request) {
-	contests, err := db.ListContests(h.DB)
+	contests, err := db.ListContests(h.DB.WithContext(r.Context()))
 	if err != nil {
 		log.Printf("list contests: %v", err)
 		http.Error(w, "Could not load contests.", http.StatusInternalServerError)
@@ -41,7 +41,7 @@ func (h *Handler) AdminContest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	series, err := db.ListSeries(h.DB, contest.ID)
+	series, err := db.ListSeries(h.DB.WithContext(r.Context()), contest.ID)
 	if err != nil {
 		log.Printf("list series: %v", err)
 		http.Error(w, "Could not load series.", http.StatusInternalServerError)
@@ -58,21 +58,17 @@ func (h *Handler) AdminContest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateContest(w http.ResponseWriter, r *http.Request) {
-	contest, err := readContestForm(w, r)
+	contest, err := readContestForm(r)
 	if err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
-	if err := db.CreateContest(h.DB, contest); err != nil {
+	if err := db.CreateContest(h.DB.WithContext(r.Context()), contest); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	if isHTMX(r) {
-		contests, err := db.ListContests(h.DB)
+		contests, err := db.ListContests(h.DB.WithContext(r.Context()))
 		if err != nil {
 			log.Printf("list contests after create: %v", err)
 			hxRedirect(w, r, "/admin/contests")
@@ -91,17 +87,13 @@ func (h *Handler) UpdateContest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	input, err := readContestForm(w, r)
+	input, err := readContestForm(r)
 	if err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
 	input.ID = contest.ID
-	if err := db.UpdateContest(h.DB, input); err != nil {
+	if err := db.UpdateContest(h.DB.WithContext(r.Context()), input); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -113,11 +105,7 @@ func (h *Handler) DeleteContest(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
-	if err := db.DeleteContest(h.DB, contest.ID); err != nil {
+	if err := db.DeleteContest(h.DB.WithContext(r.Context()), contest.ID); err != nil {
 		log.Printf("delete contest: %v", err)
 		http.Error(w, "Could not delete contest.", http.StatusInternalServerError)
 		return
@@ -130,17 +118,13 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	series, err := readSeriesForm(w, r)
+	series, err := readSeriesForm(r)
 	if err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
 	series.ContestID = contest.ID
-	if err := db.CreateSeries(h.DB, series); err != nil {
+	if err := h.Content.SaveSeries(r.Context(), UserFromContext(r.Context()), series); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -152,17 +136,16 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	input, err := readSeriesForm(w, r)
+	input, err := readSeriesForm(r)
 	if err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
 	input.ID = series.ID
-	if err := db.UpdateSeries(h.DB, input); err != nil {
+	input.ContestID = series.ContestID
+	// The HTML form edits title and position only; preserve the schedule.
+	input.StartAt, input.EndAt, input.ReleaseAt = series.StartAt, series.EndAt, series.ReleaseAt
+	if err := h.Content.SaveSeries(r.Context(), UserFromContext(r.Context()), input); err != nil {
 		h.renderAdminError(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -174,11 +157,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAdminError(w, r, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
-	if err := db.DeleteSeries(h.DB, series.ID); err != nil {
+	if err := db.DeleteSeries(h.DB.WithContext(r.Context()), series.ID); err != nil {
 		log.Printf("delete series: %v", err)
 		http.Error(w, "Could not delete series.", http.StatusInternalServerError)
 		return
@@ -196,7 +175,7 @@ func (h *Handler) adminContest(w http.ResponseWriter, r *http.Request) (*db.Cont
 		http.NotFound(w, r)
 		return nil, false
 	}
-	contest, err := db.GetContest(h.DB, contestID)
+	contest, err := db.GetContest(h.DB.WithContext(r.Context()), contestID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)
 		return nil, false
@@ -220,7 +199,7 @@ func (h *Handler) adminSeries(w http.ResponseWriter, r *http.Request) (*db.Serie
 		http.NotFound(w, r)
 		return nil, false
 	}
-	series, err := db.GetSeries(h.DB, seriesID)
+	series, err := db.GetSeries(h.DB.WithContext(r.Context()), seriesID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		http.NotFound(w, r)
 		return nil, false
@@ -238,15 +217,18 @@ func (h *Handler) adminSeries(w http.ResponseWriter, r *http.Request) (*db.Serie
 }
 
 func routeID(r *http.Request, key string) (uint, error) {
-	id, err := strconv.ParseUint(chi.URLParam(r, key), 10, 64)
+	return parseID(chi.URLParam(r, key))
+}
+
+func parseID(raw string) (uint, error) {
+	id, err := strconv.ParseUint(raw, 10, strconv.IntSize)
 	if err != nil || id == 0 {
-		return 0, fmt.Errorf("invalid %s", key)
+		return 0, gorm.ErrRecordNotFound
 	}
 	return uint(id), nil
 }
 
-func readContestForm(w http.ResponseWriter, r *http.Request) (*db.Contest, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+func readContestForm(r *http.Request) (*db.Contest, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, fmt.Errorf("invalid form submission")
 	}
@@ -267,8 +249,7 @@ func readContestForm(w http.ResponseWriter, r *http.Request) (*db.Contest, error
 	}, nil
 }
 
-func readSeriesForm(w http.ResponseWriter, r *http.Request) (*db.Series, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+func readSeriesForm(r *http.Request) (*db.Series, error) {
 	if err := r.ParseForm(); err != nil {
 		return nil, fmt.Errorf("invalid form submission")
 	}

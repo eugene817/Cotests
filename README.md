@@ -6,11 +6,16 @@ Cotests is a remake of ZawodyWeb with additional functionality, built with Go,
 chi, HTMX, GORM, and SQLite (with optional PostgreSQL). The web application is
 packaged as a single binary.
 
-Currently implemented: accounts, sessions, contest/series administration, and
-public browsing of active published contests. The judge has only an interface
+Currently implemented: accounts, sessions, contest/series administration,
+published contest browsing, scoped organizer/participant memberships and series
+schedules. The content backend provides revisioned authoring, private tests,
+PDF delivery, task assignments, participant statement/sample access and bounded
+ZIP preview/commit through `/api/v1`. See [HTTP_API.md](HTTP_API.md) for contracts;
+the corresponding frontend screens remain a separate workstream.
+The judge has only an interface
 and a no-op implementation that returns “unavailable”; it executes nothing and
 produces no results. The engine will be designed with the professor.
-Problem authoring, submission persistence, rankings, and quizzes are planned.
+Submission persistence, rankings, and quizzes are planned.
 
 ## Quick start
 
@@ -30,7 +35,12 @@ argument.
 ```
 
 Runtime state is explicit: `DATA_DIR` defaults to the current directory and
-contains `cotests.db` when `DATABASE_URL` is absent. `LISTEN_ADDR` defaults to
+contains `cotests.db` when `DATABASE_URL` is absent. `ARTIFACT_DIR` defaults to
+`DATA_DIR/artifacts`; these private files are never served from `/static`.
+`MAX_ARTIFACT_BYTES`, `MAX_IMPORT_BYTES`, and `MAX_IMPORT_FILES` bound content
+uploads/imports. `MAX_STORAGE_BYTES` defaults to 1 GiB for the private artifact
+directory; deploy one web process per directory. Admins can invoke
+`POST /api/v1/artifacts/gc` to collect old unreferenced files. `LISTEN_ADDR` defaults to
 `:3000`. `PUBLIC_URL`, when set, must be an `http` or `https` origin and makes
 cookies secure automatically for an HTTPS origin. Set `DATABASE_URL` to a
 PostgreSQL DSN to use PostgreSQL instead of local SQLite.
@@ -46,18 +56,24 @@ orphaned sessions exist, rather than deleting them.
 
 ## Verification
 
+All tests live under `tests/`, grouped by component. Shared test helpers are in
+`tests/internal/testutil/`, and historical database fixtures are in
+`tests/db/testdata/`. Run only the test suites with `go test ./tests/...`, or use
+the repository-wide checks below:
+
 ```bash
 go test ./...
 go vet ./...
 go build -o cotests .
 ```
 
-To run the opt-in PostgreSQL integration test, provide a disposable PostgreSQL
-database URL with permission to create schemas. The test creates and drops a
-random `cotests_test_*` schema only.
+For PostgreSQL integration checks, provide a disposable database with permission
+to create schemas. Tests create and drop only random `cotests_test_*` schemas.
+CI provisions PostgreSQL 17; the full race suite has also passed locally against
+PostgreSQL 17 through OrbStack's Docker-compatible API.
 
 ```bash
-COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go test ./internal/db -run TestPostgresMigrations
+COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go test -race ./...
 ```
 
 ## Stack
@@ -74,25 +90,43 @@ COTESTS_TEST_POSTGRES_DSN="postgres://user:pass@localhost:5432/cotests_test" go 
 
 - Session identifiers are random 256-bit values. Only their SHA-256 hashes are stored in the database.
 - Session cookies are HTTP-only, `SameSite=Lax`, and can be marked `Secure` with `SECURE_COOKIES=true`.
-- All state-changing forms require a CSRF token.
+- All state-changing requests require a session-bound, HMAC-signed CSRF token;
+  JSON and multipart requests send it in `X-CSRF-Token`.
 - Public registration always creates a `user` account. Administrators are created locally with `cotests admin create`.
 
-SQLite connection handling and operator-controlled administrator bootstrap are
-implemented. Authentication throttling remains pending; see [CODE_REVIEW.md](CODE_REVIEW.md).
+SQLite connection handling, operator-controlled administrator bootstrap,
+bounded per-IP/account authentication attempts and a global bcrypt concurrency
+budget are implemented. Static assets and liveness skip session loading;
+embedded templates are excluded from public asset delivery.
 
 ## Design
 
 Visual design follows *The Digital Atelier* system. Tokens are defined in `static/css/style.css`.
 
-## Roadmap
+## Code structure and access rules
 
-Current phase: M0, partially complete. M2 will save submissions with the judge
-disabled; M3 is the web MVP for authoring and submission collection. Full
-replacement needs M4 web/content parity plus the deferred professor-led judge
-work (J). See [MVP.md](MVP.md), [JUDGE.md](JUDGE.md), and
-[FEATURE_PARITY.md](FEATURE_PARITY.md) for the scope and acceptance criteria.
+- `main.go`: configuration, dependency wiring, embedded UI and admin CLI.
+- `internal/server`: HTML/HTMX and JSON handlers, sessions and request middleware.
+- `internal/content`: scoped permissions, schedules and file/import transactions.
+- `internal/db`: GORM models, queries and ordered, immutable migrations.
+- `internal/artifact` / `internal/importer`: private files and bounded test ZIPs.
+- `internal/auth`, `internal/config`, `internal/judge`: credentials, runtime
+  configuration and the provisional judge interface/Noop.
+- `static`: embedded templates and assets; only CSS/JS are publicly served.
 
-See [ROADMAP.md](ROADMAP.md) for milestones and acceptance criteria,
-[ARCHITECTURE.md](ARCHITECTURE.md) for the proposed stack and domain design,
-[AUTH.md](AUTH.md) for account policies, and [CODE_REVIEW.md](CODE_REVIEW.md)
-for verified findings and differences from the original ZawodyWeb.
+Admins manage all contests and grant organizer roles. Organizers manage assigned
+contests and their own problem libraries; participants read released content in
+contests they belong to. Public schedules do not expose unreleased statements.
+File downloads repeat the same resource checks. Statement release is separate
+from submission eligibility; submission windows use UTC half-open intervals.
+
+Published revisions and file bytes are immutable. Editing creates a new draft;
+assignments pin a published revision. Future submissions must retain that revision
+and ownership, and prevent destructive cascades. Add schema changes as new
+migrations, preserving existing data. Backups must include both DB and artifacts.
+
+## Project documents
+
+- [ROADMAP.md](ROADMAP.md): remaining backend work, release checks and legacy/judge scope.
+- [HTTP_API.md](HTTP_API.md): implemented routes, payloads, permissions and limits.
+- [FRONTEND_TODO.md](FRONTEND_TODO.md): UI backlog and browser walkthrough checklist.

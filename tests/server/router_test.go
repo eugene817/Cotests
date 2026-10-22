@@ -1,6 +1,7 @@
-package server
+package server_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,7 +10,7 @@ import (
 	"time"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 )
 
 func TestLoginSetsSessionAndHTMXRedirect(t *testing.T) {
@@ -453,7 +454,7 @@ func TestHTMXGuestIsDeniedWithFragment(t *testing.T) {
 	}
 }
 
-func TestValidateCredentials(t *testing.T) {
+func TestRegisterValidatesCredentials(t *testing.T) {
 	tests := []struct {
 		name     string
 		email    string
@@ -471,19 +472,117 @@ func TestValidateCredentials(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateCredentials(tt.email, tt.password)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("validateCredentials() error = %v, want error %t", err, tt.wantErr)
+			router, _ := newTestRouter(t)
+			csrf := getCSRFCookie(t, router, "/register")
+			request := formRequest(http.MethodPost, "/register", url.Values{
+				"email": {tt.email}, "password": {tt.password}, "csrf_token": {csrf.Value},
+			}, csrf)
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+			wantStatus := http.StatusSeeOther
+			if tt.wantErr {
+				wantStatus = http.StatusBadRequest
+			}
+			if response.Code != wantStatus {
+				t.Fatalf("registration status = %d, want %d: %s", response.Code, wantStatus, response.Body.String())
 			}
 		})
 	}
 }
 
-func TestConstantTimeEqual(t *testing.T) {
-	if !constantTimeEqual("same", "same") {
-		t.Fatal("equal strings were not equal")
+func TestCSRFTokenComparison(t *testing.T) {
+	for _, variant := range []string{"matching", "different", "longer"} {
+		t.Run(variant, func(t *testing.T) {
+			router, _ := newTestRouter(t)
+			csrf := getCSRFCookie(t, router, "/register")
+			token := csrf.Value
+			wantStatus := http.StatusSeeOther
+			switch variant {
+			case "different":
+				// Change one byte without changing the token length.
+				if token[0] == 'a' {
+					token = "b" + token[1:]
+				} else {
+					token = "a" + token[1:]
+				}
+				wantStatus = http.StatusForbidden
+			case "longer":
+				token += "!"
+				wantStatus = http.StatusForbidden
+			}
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, formRequest(http.MethodPost, "/register", url.Values{
+				"email": {"user@example.com"}, "password": {"password1"}, "csrf_token": {token},
+			}, csrf))
+			if response.Code != wantStatus {
+				t.Fatalf("CSRF %s status = %d, want %d", variant, response.Code, wantStatus)
+			}
+		})
 	}
-	if constantTimeEqual("same", "different") || constantTimeEqual("same", "same!") {
-		t.Fatal("different strings were equal")
+}
+
+func TestAdminProblemRevisionSelectionAndScope(t *testing.T) {
+	router, database := newTestRouter(t)
+	admin := testutil.CreateAdmin(t, database, "revisions@example.com")
+	session := &http.Cookie{Name: "session_token", Value: testutil.CreateSession(t, database, admin.ID)}
+	problem := &db.Problem{OwnerID: admin.ID, Title: "First", Code: "first"}
+	original := &db.ProblemRevision{Statement: "Original"}
+	if err := db.CreateProblem(database, problem, original); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := db.CreateDraftRevision(database, problem.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := &db.Problem{OwnerID: admin.ID, Title: "Other", Code: "other"}
+	foreign := &db.ProblemRevision{Statement: "Other statement"}
+	if err := db.CreateProblem(database, other, foreign); err != nil {
+		t.Fatal(err)
+	}
+	page := fmt.Sprintf("/admin/problems/%d", problem.ID)
+	csrf := getCSRFCookie(t, router, page, session)
+	for _, test := range []struct {
+		query string
+		want  int
+	}{
+		{"", http.StatusOK},
+		{fmt.Sprintf("?revision=%d", original.ID), http.StatusOK},
+		{fmt.Sprintf("?revision=%d", foreign.ID), http.StatusNotFound},
+		{"?revision=0", http.StatusNotFound},
+		{"?revision=invalid", http.StatusNotFound},
+	} {
+		req := httptest.NewRequest(http.MethodGet, page+test.query, nil)
+		req.AddCookie(session)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		if response.Code != test.want {
+			t.Fatalf("GET %s: %d, want %d", page+test.query, response.Code, test.want)
+		}
+	}
+	for _, revision := range []*db.ProblemRevision{original, foreign} {
+		path := fmt.Sprintf("%s/revisions/%d", page, revision.ID)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, formRequest(http.MethodPost, path, url.Values{
+			"statement": {"Updated"}, "csrf_token": {csrf.Value},
+		}, session, csrf))
+		want := http.StatusSeeOther
+		if revision.ID == foreign.ID {
+			want = http.StatusNotFound
+		}
+		if response.Code != want {
+			t.Fatalf("POST %s: %d, want %d: %s", path, response.Code, want, response.Body)
+		}
+	}
+	for _, test := range []struct {
+		id   uint
+		want string
+	}{{original.ID, "Updated"}, {latest.ID, "Original"}, {foreign.ID, "Other statement"}} {
+		revision, err := db.GetProblemRevision(database, test.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if revision.Statement != test.want {
+			t.Fatalf("revision %d statement = %q, want %q", test.id, revision.Statement, test.want)
+		}
 	}
 }

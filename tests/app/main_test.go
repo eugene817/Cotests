@@ -1,29 +1,27 @@
-package main
+package app_test
 
 import (
 	"bytes"
 	"html/template"
 	"io"
-	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"cotests/internal/app"
 	"cotests/internal/db"
+	"cotests/static"
 )
 
 func TestEmbeddedTemplatesParse(t *testing.T) {
-	sub, err := fs.Sub(staticFS, "static")
-	if err != nil {
-		t.Fatalf("sub filesystem: %v", err)
-	}
+	sub := static.FS()
 	if _, err := template.ParseFS(sub, "templates/*.html"); err != nil {
 		t.Fatalf("parse templates: %v", err)
 	}
 }
 
 func TestRunAdminCreate(t *testing.T) {
-	database, closeDatabase, err := openDatabase(filepath.Join(t.TempDir(), "cotests.db"))
+	database, closeDatabase, err := app.OpenDatabase(filepath.Join(t.TempDir(), "cotests.db"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
@@ -31,7 +29,7 @@ func TestRunAdminCreate(t *testing.T) {
 
 	passwords := []string{"password1", "password1"}
 	var output bytes.Buffer
-	err = runAdminCreate([]string{"--email", " ADMIN@example.com ", "--name", "Admin"}, database, func(string) (string, error) {
+	err = app.RunAdminCreate([]string{"--email", " ADMIN@example.com ", "--name", "Admin"}, database, func(string) (string, error) {
 		password := passwords[0]
 		passwords = passwords[1:]
 		return password, nil
@@ -53,7 +51,7 @@ func TestRunAdminCreate(t *testing.T) {
 }
 
 func TestRunAdminCreateRejectsDuplicateAndMismatchedPasswords(t *testing.T) {
-	database, closeDatabase, err := openDatabase(filepath.Join(t.TempDir(), "cotests.db"))
+	database, closeDatabase, err := app.OpenDatabase(filepath.Join(t.TempDir(), "cotests.db"))
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
@@ -72,7 +70,7 @@ func TestRunAdminCreateRejectsDuplicateAndMismatchedPasswords(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			passwords := append([]string(nil), test.passwords...)
-			err := runAdminCreate([]string{"--email", "admin@example.com"}, database, func(string) (string, error) {
+			err := app.RunAdminCreate([]string{"--email", "admin@example.com"}, database, func(string) (string, error) {
 				password := passwords[0]
 				passwords = passwords[1:]
 				return password, nil
@@ -85,7 +83,7 @@ func TestRunAdminCreateRejectsDuplicateAndMismatchedPasswords(t *testing.T) {
 }
 
 func TestRunCommandRejectsUnknownCommand(t *testing.T) {
-	err := runCommand([]string{"admin", "delete"}, "unused", nil, io.Discard)
+	err := app.RunCommand([]string{"admin", "delete"}, "unused", nil, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "usage:") {
 		t.Fatalf("run command error = %v", err)
 	}

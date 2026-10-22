@@ -13,6 +13,24 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cotests
+          POSTGRES_PASSWORD: cotests_test
+          POSTGRES_DB: cotests_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cotests -d cotests_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      COTESTS_TEST_POSTGRES_DSN: postgres://cotests:cotests_test@localhost:5432/cotests_test?sslmode=disable
+
     steps:
       - uses: actions/checkout@v4
 
@@ -29,3 +47,6 @@ jobs:
 
       - name: Test with race detector
         run: go test -race ./...
+
+      - name: Build
+        run: go build ./...

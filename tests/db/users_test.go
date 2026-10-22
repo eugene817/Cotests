@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 
 	"gorm.io/gorm"
 )

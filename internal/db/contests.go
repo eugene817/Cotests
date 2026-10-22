@@ -1,9 +1,7 @@
 package db
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -31,11 +29,9 @@ func GetContest(database *gorm.DB, contestID uint) (*Contest, error) {
 	return &contest, nil
 }
 
-func ListPublicContests(database *gorm.DB, now time.Time) ([]Contest, error) {
+func ListPublicContests(database *gorm.DB) ([]Contest, error) {
 	var contests []Contest
 	if err := database.Where("visibility = ?", ContestPublished).
-		Where("start_at IS NULL OR start_at <= ?", now).
-		Where("end_at IS NULL OR end_at > ?", now).
 		Order("start_at ASC, id DESC").
 		Find(&contests).Error; err != nil {
 		return nil, err
@@ -43,12 +39,10 @@ func ListPublicContests(database *gorm.DB, now time.Time) ([]Contest, error) {
 	return contests, nil
 }
 
-func GetPublicContest(database *gorm.DB, contestID uint, now time.Time) (*Contest, error) {
+func GetPublicContest(database *gorm.DB, contestID uint) (*Contest, error) {
 	var contest Contest
 	if err := database.Where("id = ?", contestID).
 		Where("visibility = ?", ContestPublished).
-		Where("start_at IS NULL OR start_at <= ?", now).
-		Where("end_at IS NULL OR end_at > ?", now).
 		First(&contest).Error; err != nil {
 		return nil, err
 	}
@@ -96,29 +90,25 @@ func validateContest(contest *Contest) error {
 		contest.Visibility = ContestDraft
 	}
 	if contest.Title == "" {
-		return fmt.Errorf("contest title is required")
+		return ValidationError{"contest title is required"}
+	}
+	if len(contest.Title) > 300 || len(contest.Description) > 100000 {
+		return ValidationError{"contest fields are too large"}
 	}
 	if contest.Visibility != ContestDraft && contest.Visibility != ContestPublished {
-		return fmt.Errorf("invalid contest visibility")
+		return ValidationError{"invalid contest visibility"}
 	}
 	if contest.StartAt != nil && contest.EndAt != nil && !contest.EndAt.After(*contest.StartAt) {
-		return fmt.Errorf("contest end time must be after start time")
+		return ValidationError{"contest end time must be after start time"}
 	}
 	return nil
 }
 
 func CreateSeries(database *gorm.DB, series *Series) error {
-	series.Title = strings.TrimSpace(series.Title)
-	if series.ContestID == 0 {
-		return fmt.Errorf("contest is required")
+	if err := validateSeries(series); err != nil {
+		return err
 	}
-	if series.Title == "" {
-		return fmt.Errorf("series title is required")
-	}
-	if series.Position < 0 {
-		return fmt.Errorf("series position must not be negative")
-	}
-	return database.Create(series).Error
+	return database.Omit("Contest").Create(series).Error
 }
 
 func ListSeries(database *gorm.DB, contestID uint) ([]Series, error) {
@@ -141,22 +131,38 @@ func UpdateSeries(database *gorm.DB, series *Series) error {
 	if series.ID == 0 {
 		return gorm.ErrRecordNotFound
 	}
-	series.Title = strings.TrimSpace(series.Title)
-	if series.Title == "" {
-		return fmt.Errorf("series title is required")
+	if err := validateSeries(series); err != nil {
+		return err
 	}
-	if series.Position < 0 {
-		return fmt.Errorf("series position must not be negative")
-	}
-	result := database.Model(&Series{}).Where("id = ?", series.ID).Updates(map[string]any{
-		"title":    series.Title,
-		"position": series.Position,
+	result := database.Model(&Series{}).Where("id = ? AND contest_id = ?", series.ID, series.ContestID).Updates(map[string]any{
+		"title":      series.Title,
+		"position":   series.Position,
+		"start_at":   series.StartAt,
+		"end_at":     series.EndAt,
+		"release_at": series.ReleaseAt,
 	})
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
 		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+func validateSeries(series *Series) error {
+	series.Title = strings.TrimSpace(series.Title)
+	if series.ContestID == 0 {
+		return ValidationError{"contest is required"}
+	}
+	if series.Title == "" || len(series.Title) > 300 {
+		return ValidationError{"series title must contain between 1 and 300 bytes"}
+	}
+	if series.Position < 0 {
+		return ValidationError{"series position must not be negative"}
+	}
+	if series.StartAt != nil && series.EndAt != nil && !series.EndAt.After(*series.StartAt) {
+		return ValidationError{"series end time must be after start time"}
 	}
 	return nil
 }

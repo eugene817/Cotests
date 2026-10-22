@@ -6,20 +6,28 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"cotests/internal/auth"
+	"cotests/internal/content"
 	"cotests/internal/db"
 
 	"gorm.io/gorm"
 )
 
 type Handler struct {
-	DB            *gorm.DB
-	Tpl           Template
-	SecureCookies bool
+	DB             *gorm.DB
+	Tpl            Template
+	SecureCookies  bool
+	Content        *content.Service
+	CSRFKey        []byte
+	authWork       chan struct{}
+	authAttempts   map[string]authAttempt
+	authAttemptsMu sync.Mutex
 }
 
 type Template interface {
@@ -30,12 +38,14 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	SQLDB, err := h.DB.DB()
 	if err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprintf(w, "db: %v", err)
+		log.Printf("readiness: %v", err)
+		w.Write([]byte("not ready"))
 		return
 	}
-	if err := SQLDB.Ping(); err != nil {
+	if err := SQLDB.PingContext(r.Context()); err != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		fmt.Fprintf(w, "db: %v", err)
+		log.Printf("readiness: %v", err)
+		w.Write([]byte("not ready"))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -72,22 +82,28 @@ func (h *Handler) RegisterPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	email, password, name, err := readAuthForm(w, r)
+	select {
+	case h.authWork <- struct{}{}:
+		defer func() { <-h.authWork }()
+	default:
+		h.renderAuthError(w, r, "register", "Please wait before trying again.", http.StatusTooManyRequests)
+		return
+	}
+	email, password, name, err := readAuthForm(r)
 	if err != nil {
 		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAuthError(w, r, "register", "Your form has expired. Please try again.", http.StatusForbidden)
+	if !h.allowAuthAttempt(r, email) {
+		h.renderAuthError(w, r, "register", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-
 	if err := validateCredentials(email, password); err != nil {
 		h.renderAuthError(w, r, "register", err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	user, err := db.CreateUser(h.DB, email, password, name)
+	user, err := db.CreateUser(h.DB.WithContext(r.Context()), email, password, name)
 	if err != nil {
 		if db.IsDuplicateError(err) {
 			h.renderAuthError(w, r, "register", "This email is already taken", http.StatusConflict)
@@ -98,7 +114,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, token, err := db.CreateSession(h.DB, user.ID)
+	_, token, err := db.CreateSession(h.DB.WithContext(r.Context()), user.ID)
 	if err != nil {
 		log.Printf("session create: %v", err)
 		hxRedirect(w, r, "/login")
@@ -110,22 +126,28 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	email, password, _, err := readAuthForm(w, r)
+	select {
+	case h.authWork <- struct{}{}:
+		defer func() { <-h.authWork }()
+	default:
+		h.renderAuthError(w, r, "login", "Please wait before trying again.", http.StatusTooManyRequests)
+		return
+	}
+	email, password, _, err := readAuthForm(r)
 	if err != nil {
 		h.renderAuthError(w, r, "login", err.Error(), http.StatusBadRequest)
 		return
 	}
-	if !h.validCSRFToken(r) {
-		h.renderAuthError(w, r, "login", "Your form has expired. Please try again.", http.StatusForbidden)
+	if !h.allowAuthAttempt(r, email) {
+		h.renderAuthError(w, r, "login", "Please wait before trying again.", http.StatusTooManyRequests)
 		return
 	}
-
 	if err := validateCredentials(email, password); err != nil {
 		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusBadRequest)
 		return
 	}
 
-	user, err := db.GetUserByEmail(h.DB, email)
+	user, err := db.GetUserByEmail(h.DB.WithContext(r.Context()), email)
 	if err != nil {
 		h.renderAuthError(w, r, "login", "Invalid email or password", http.StatusUnauthorized)
 		return
@@ -135,7 +157,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, token, err := db.CreateSession(h.DB, user.ID)
+	_, token, err := db.CreateSession(h.DB.WithContext(r.Context()), user.ID)
 	if err != nil {
 		log.Printf("session create: %v", err)
 		h.renderAuthError(w, r, "login", "Login failed. Please try again.", http.StatusInternalServerError)
@@ -147,15 +169,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	if !h.validCSRFToken(r) {
-		renderAccessError(w, http.StatusForbidden, "Your form has expired. Please refresh and try again.")
-		return
-	}
 	cookie, err := r.Cookie("session_token")
 	if err == nil {
-		session, err := db.GetSessionByToken(h.DB, cookie.Value)
+		session, err := db.GetSessionByToken(h.DB.WithContext(r.Context()), cookie.Value)
 		if err == nil {
-			if err := db.DeleteSession(h.DB, session.ID); err != nil {
+			if err := db.DeleteSession(h.DB.WithContext(r.Context()), session.ID); err != nil {
 				log.Printf("delete session: %v", err)
 			}
 		}
@@ -227,7 +245,7 @@ func (h *Handler) renderAuthError(w http.ResponseWriter, r *http.Request, mode, 
 }
 
 func (h *Handler) withCSRFToken(w http.ResponseWriter, r *http.Request, data PageData) PageData {
-	if cookie, err := r.Cookie(csrfCookieName); err == nil && cookie.Value != "" {
+	if cookie, err := r.Cookie(csrfCookieName); err == nil && h.validSignedCSRF(r, cookie.Value) {
 		data.CSRFToken = cookie.Value
 		return data
 	}
@@ -236,25 +254,13 @@ func (h *Handler) withCSRFToken(w http.ResponseWriter, r *http.Request, data Pag
 		log.Printf("generate csrf token: %v", err)
 		return data
 	}
+	token = h.signCSRF(r, token)
 	http.SetCookie(w, &http.Cookie{Name: csrfCookieName, Value: token, Path: "/", MaxAge: int(7 * 24 * time.Hour / time.Second), SameSite: http.SameSiteLaxMode, Secure: h.SecureCookies})
 	data.CSRFToken = token
 	return data
 }
 
-func (h *Handler) validCSRFToken(r *http.Request) bool {
-	cookie, err := r.Cookie(csrfCookieName)
-	if err != nil || cookie.Value == "" {
-		return false
-	}
-	token := r.Header.Get("X-CSRF-Token")
-	if token == "" {
-		token = r.FormValue("csrf_token")
-	}
-	return constantTimeEqual(cookie.Value, token)
-}
-
-func readAuthForm(w http.ResponseWriter, r *http.Request) (email, password, name string, err error) {
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+func readAuthForm(r *http.Request) (email, password, name string, err error) {
 	if err := r.ParseForm(); err != nil {
 		return "", "", "", fmt.Errorf("invalid form submission")
 	}
@@ -275,4 +281,53 @@ func hxRedirect(w http.ResponseWriter, r *http.Request, url string) {
 	} else {
 		http.Redirect(w, r, url, http.StatusSeeOther)
 	}
+}
+
+type authAttempt struct {
+	count int
+	start time.Time
+}
+
+// Bound costly bcrypt work by both source address and normalized email. The
+// buckets expire quickly so a client cannot permanently lock out an account.
+func (h *Handler) allowAuthAttempt(r *http.Request, email string) bool {
+	const limit = 10
+	const window = time.Minute
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	now := time.Now()
+	h.authAttemptsMu.Lock()
+	defer h.authAttemptsMu.Unlock()
+	if h.authAttempts == nil {
+		h.authAttempts = make(map[string]authAttempt)
+	}
+	for key, attempt := range h.authAttempts {
+		if now.Sub(attempt.start) >= window {
+			delete(h.authAttempts, key)
+		}
+	}
+	if len(h.authAttempts) > 10000 {
+		return false
+	}
+	keys := []string{"ip:" + host, "email:" + strings.ToLower(strings.TrimSpace(email))}
+	for _, key := range keys {
+		attempt := h.authAttempts[key]
+		if attempt.start.IsZero() || now.Sub(attempt.start) >= window {
+			attempt = authAttempt{start: now}
+		}
+		if attempt.count >= limit {
+			return false
+		}
+	}
+	for _, key := range keys {
+		attempt := h.authAttempts[key]
+		if attempt.start.IsZero() || now.Sub(attempt.start) >= window {
+			attempt = authAttempt{start: now}
+		}
+		attempt.count++
+		h.authAttempts[key] = attempt
+	}
+	return true
 }

@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"html/template"
@@ -8,10 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"cotests/internal/testutil"
+	"cotests/internal/server"
+	"cotests/tests/internal/testutil"
 
 	"gorm.io/gorm"
 )
+
+const csrfCookieName = "csrf_token"
 
 func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 	t.Helper()
@@ -28,8 +31,10 @@ func newTestRouter(t *testing.T) (http.Handler, *gorm.DB) {
 {{define "contest_list"}}{{range .}}{{template "contest_card" .}}{{else}}No contests yet{{end}}{{end}}
 {{define "admin_error"}}{{.Error}}{{end}}
 {{define "public_contests"}}public contests{{end}}
-{{define "public_contest"}}public contest{{end}}`))
-	return NewRouter(database, http.NotFoundHandler(), tpl, Config{SecureCookies: true}), database
+{{define "public_contest"}}public contest{{end}}
+{{define "problems"}}problems{{end}}
+{{define "problem_detail"}}problem detail{{end}}`))
+	return server.NewRouter(database, http.NotFoundHandler(), tpl, server.Config{SecureCookies: true, ArtifactDir: t.TempDir(), MaxArtifactBytes: 1024}), database
 }
 
 func getCSRFCookie(t *testing.T, router http.Handler, path string, cookies ...*http.Cookie) *http.Cookie {

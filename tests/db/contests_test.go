@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"cotests/internal/db"
-	"cotests/internal/testutil"
+	"cotests/tests/internal/testutil"
 
 	"gorm.io/gorm"
 )
@@ -169,7 +169,7 @@ func TestSeriesCRUD(t *testing.T) {
 		t.Fatalf("create series: %v", err)
 	}
 
-	update := &db.Series{ID: series.ID, Title: "Updated", Position: 1}
+	update := &db.Series{ID: series.ID, ContestID: contest.ID, Title: "Updated", Position: 1}
 	if err := db.UpdateSeries(database, update); err != nil {
 		t.Fatalf("update series: %v", err)
 	}
@@ -189,7 +189,32 @@ func TestSeriesCRUD(t *testing.T) {
 	}
 }
 
-func TestPublicContestsRespectVisibilityAndSchedule(t *testing.T) {
+func TestUpdateSeriesPreservesContestScopeAndReportsMissingRows(t *testing.T) {
+	database := testutil.NewDatabase(t)
+	first := createContest(t, database, "First")
+	second := createContest(t, database, "Second")
+	series := &db.Series{ContestID: first.ID, Title: "Original"}
+	if err := db.CreateSeries(database, series); err != nil {
+		t.Fatal(err)
+	}
+	for _, update := range []*db.Series{
+		{ID: series.ID, ContestID: second.ID, Title: "Wrong contest"},
+		{ID: series.ID + 1, ContestID: first.ID, Title: "Missing"},
+	} {
+		if err := db.UpdateSeries(database, update); !errors.Is(err, gorm.ErrRecordNotFound) {
+			t.Fatalf("update error = %v, want record not found", err)
+		}
+	}
+	loaded, err := db.GetSeries(database, series.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ContestID != first.ID || loaded.Title != "Original" {
+		t.Fatalf("out-of-scope update changed series: %#v", loaded)
+	}
+}
+
+func TestPublicContestsShowPublishedArchivesAndSchedules(t *testing.T) {
 	database := testutil.NewDatabase(t)
 	now := time.Date(2026, time.September, 4, 12, 0, 0, 0, time.UTC)
 	past := now.Add(-time.Hour)
@@ -207,17 +232,17 @@ func TestPublicContestsRespectVisibilityAndSchedule(t *testing.T) {
 		}
 	}
 
-	contests, err := db.ListPublicContests(database, now)
+	contests, err := db.ListPublicContests(database)
 	if err != nil {
 		t.Fatalf("list public contests: %v", err)
 	}
-	if len(contests) != 1 || contests[0].ID != open.ID {
+	if len(contests) != 3 {
 		t.Fatalf("public contests = %#v", contests)
 	}
-	if _, err := db.GetPublicContest(database, open.ID, now); err != nil {
+	if _, err := db.GetPublicContest(database, open.ID); err != nil {
 		t.Fatalf("get open contest: %v", err)
 	}
-	if _, err := db.GetPublicContest(database, open.ID+1, now); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := db.GetPublicContest(database, open.ID+1); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("get hidden contest: %v, want record not found", err)
 	}
 }

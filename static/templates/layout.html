@@ -19,7 +19,7 @@
       <a href="/contests" class="btn btn-tertiary">Contests</a>
       {{if .User}}
         <span class="label-sm" style="margin-left:var(--spacing-2);">{{.User.Email}}</span>
-        {{if eq .User.Role "admin"}}<a href="/admin/contests" class="btn btn-tertiary">Admin</a>{{end}}
+        {{if eq .User.Role "admin"}}<a href="/admin/contests" class="btn btn-tertiary">Admin</a><a href="/admin/problems" class="btn btn-tertiary">Problems</a>{{end}}
         <form method="post" action="/logout" hx-post="/logout" style="display:inline">
           <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
           <button class="btn btn-tertiary" type="submit">Logout</button>
